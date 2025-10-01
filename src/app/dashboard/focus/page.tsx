@@ -15,7 +15,7 @@ function FocusPageContent() {
 
 export default function FocusPage() {
   return (
-    <Suspense fallback={<div>Loading...</div>}>
+    <Suspense>
       <FocusPageContent />
     </Suspense>
   );

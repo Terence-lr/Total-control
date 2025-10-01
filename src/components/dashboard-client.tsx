@@ -66,15 +66,18 @@ const parseDuration = (durationStr: string): number => {
 };
 
 const timeToMinutes = (timeStr: string): number => {
+  if (!timeStr) return 0;
   const [time, period] = timeStr.split(' ');
+  if (!time) return 0;
   let [hours, minutes] = time.split(':').map(Number);
+
   if (period && period.toLowerCase() === 'pm' && hours !== 12) {
     hours += 12;
   }
   if (period && period.toLowerCase() === 'am' && hours === 12) {
     hours = 0;
   }
-  return hours * 60 + minutes;
+  return hours * 60 + (minutes || 0);
 };
 
 
@@ -102,6 +105,15 @@ export function DashboardClient() {
     originalPlan: string;
   } | null>(null);
   
+  const handleFinalTranscript = useCallback((text: string) => {
+    setTranscript({ interim: '', final: text }); // Update parent state
+    if (clarificationState) {
+        handleClarificationResponse(text);
+    } else {
+        handleGenerateSchedule(text);
+    }
+  }, [clarificationState]);
+
   const {
     isRecording,
     isProcessing,
@@ -114,13 +126,7 @@ export function DashboardClient() {
     recordingTime,
     setTranscript,
   } = useSpeechRecognition({
-      onTranscriptFinal: (text) => {
-        if (clarificationState) {
-          handleClarificationResponse(text);
-        } else {
-          handleGenerateSchedule(text);
-        }
-      },
+      onTranscriptFinal: handleFinalTranscript,
       isGenerating: isGenerating,
   });
   
@@ -212,10 +218,11 @@ export function DashboardClient() {
             }));
             setSchedule(null);
         } else if (result.schedule && result.schedule.length > 0) {
-            setSchedule(result.schedule);
+            const initialSchedule = result.schedule;
+            setSchedule(initialSchedule);
             setCurrentTaskIndex(0); 
             setClarificationState(null);
-            router.push('/dashboard/focus?taskIndex=0');
+            router.push(`/dashboard/focus?taskIndex=0`);
         } else {
             toast({
                 title: "Empty Schedule",
@@ -513,14 +520,17 @@ export function DashboardClient() {
 
   const nowPosition = calculateNowPosition();
 
-  const handleTextInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter' && planText.trim()) {
-        if (clarificationState) {
-            handleClarificationResponse(planText);
-        } else {
-            handleGenerateSchedule(planText);
+  const handleTextInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault();
+        const target = e.target as HTMLInputElement | HTMLTextAreaElement;
+        if (target.value.trim()) {
+            if (clarificationState) {
+                handleClarificationResponse(target.value);
+            } else {
+                handleGenerateSchedule(target.value);
+            }
         }
-        setPlanText('');
     }
   };
 
@@ -616,7 +626,7 @@ export function DashboardClient() {
             </Card>
         )}
         
-        {schedule && !scheduleIsComplete && (
+        {schedule && !scheduleIsComplete && currentTaskIndex !== -1 && (
           <Card>
             <CardHeader>
               <CardTitle>Focus Mode</CardTitle>
@@ -658,7 +668,7 @@ export function DashboardClient() {
                       key={index}
                       className={cn(
                         "flex items-start gap-4 p-4 rounded-lg transition-all border",
-                        index < currentTaskIndex && "opacity-50 bg-muted/50",
+                        index < completedTasksCount && "opacity-50 bg-muted/50",
                         index === currentTaskIndex && "bg-accent/10 border-accent",
                       )}
                     >
@@ -697,14 +707,14 @@ export function DashboardClient() {
                 <div className="space-y-3 fade-in">
                     <Label className="font-semibold">{clarificationState.questions[0]}</Label>
                      <div className="flex gap-2">
-                        <Input
-                            type="text"
+                        <Textarea
                             value={planText}
                             onChange={(e) => setPlanText(e.target.value)}
                             onKeyDown={handleTextInputKeyDown}
-                            placeholder="Type your answer..."
+                            placeholder="Type your answer... (Cmd+Enter to submit)"
                             disabled={processingOrGenerating}
                             className="text-base"
+                            rows={2}
                         />
                          <Button onClick={() => handleClarificationResponse(planText)} disabled={!planText.trim() || processingOrGenerating}>
                            {processingOrGenerating ? <Loader2 className="animate-spin" /> : <ArrowRight />}
@@ -712,39 +722,44 @@ export function DashboardClient() {
                      </div>
                 </div>
              ) : (
-                <div className="space-y-3">
-                    <div className="flex items-center gap-2">
-                        <Input
-                            type="text"
-                            value={transcript.final || transcript.interim || planText}
-                            onChange={(e) => setPlanText(e.target.value)}
-                            onKeyDown={handleTextInputKeyDown}
-                            placeholder={isRecording ? "Recording..." : (processingOrGenerating ? "Thinking..." : "What's on your plate today?")}
-                            disabled={isRecording || processingOrGenerating}
-                            className="text-base"
-                        />
-                        <Button
-                            size="icon"
-                            variant="default"
-                            onClick={isRecording ? stopRecognition : startRecognition}
-                            disabled={!isAvailable || processingOrGenerating}
-                            className={cn(
-                              "bg-accent hover:bg-accent/90 text-accent-foreground",
-                              isRecording && "bg-destructive hover:bg-destructive/90 animate-pulse-ring"
-                            )}
-                        >
-                            {isRecording ? <Square /> : <Mic />}
-                        </Button>
+                <div className="relative">
+                    <Textarea
+                        value={transcript.final || transcript.interim || planText}
+                        onChange={(e) => { setPlanText(e.target.value); setTranscript({ final: '', interim: '' }); }}
+                        onKeyDown={handleTextInputKeyDown}
+                        placeholder={isRecording ? "Recording..." : (processingOrGenerating ? "Thinking..." : "What's on your plate today? (Cmd+Enter to submit)")}
+                        disabled={isRecording || processingOrGenerating}
+                        className="text-base pr-12"
+                        rows={3}
+                    />
+                    <div className="absolute bottom-2 right-2 flex items-center gap-2">
+                        {isRecording ? (
+                            <Button size="icon" variant="destructive" onClick={stopRecognition} className="animate-pulse-ring">
+                                <Square />
+                            </Button>
+                        ) : (
+                            <Button
+                                size="icon"
+                                variant="default"
+                                onClick={startRecognition}
+                                disabled={!isAvailable || processingOrGenerating}
+                                className={cn("bg-accent hover:bg-accent/90 text-accent-foreground")}
+                            >
+                                <Mic />
+                            </Button>
+                        )}
                     </div>
-                     {isRecording && (
-                        <div className="flex justify-between items-center text-sm text-muted-foreground">
-                            <span>Recording... {formatTime(recordingTime)}</span>
-                             <Button variant="ghost" size="sm" onClick={cancelRecognition}>Cancel</Button>
-                        </div>
-                    )}
-                    {error && <p className="text-sm text-destructive">{error}</p>}
                 </div>
              )}
+             
+            {isRecording && (
+                <div className="flex justify-between items-center text-sm text-muted-foreground">
+                    <span>Recording... {formatTime(recordingTime)}</span>
+                        <Button variant="ghost" size="sm" onClick={cancelRecognition}>Cancel</Button>
+                </div>
+            )}
+            {error && <p className="text-sm text-destructive">{error}</p>}
+
 
              {!schedule && !isGenerating && !clarificationState && tomorrowsPlan && (
                 <Button variant="outline" className="w-full" onClick={() => handleGenerateSchedule(tomorrowsPlan)}>
@@ -757,6 +772,11 @@ export function DashboardClient() {
                     <Button variant="link" onClick={() => handleGenerateSchedule("I have a dentist appointment at 2pm, need to work out for 30 minutes, study for 2 hours, and want to be in bed by 10pm")}>
                         Try an example
                     </Button>
+                </div>
+             )}
+             { (isGenerating || isProcessing) && (
+                <div className="flex items-center justify-center text-sm text-muted-foreground">
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin"/> Thinking...
                 </div>
              )}
           </CardContent>
@@ -797,7 +817,7 @@ export function DashboardClient() {
                     multiline
                 />
                  <Button variant="outline" className="w-full" onClick={() => {
-                     const completedTasks = schedule?.filter((_,i) => i < currentTaskIndex).map(t => t.task).join(', ') || "No tasks completed.";
+                     const completedTasks = schedule?.filter((_,i) => i < completedTasksCount).map(t => t.task).join(', ') || "No tasks completed.";
                      handleSummarizeDay(`Completed tasks: ${completedTasks}`);
                  }}>
                     <Book className="mr-2 h-4 w-4" /> Reflect

@@ -43,7 +43,7 @@ export function FocusClient() {
   const [completedTasksCount, setCompletedTasksCount] = useState(0);
   const [totalFocusedTime, setTotalFocusedTime] = useState(0);
 
-  const isTimerStarted = currentTaskIndex !== -1 && isTimerActive;
+  const isTimerStarted = currentTaskIndex !== -1;
   const currentTask = schedule && currentTaskIndex !== -1 ? schedule[currentTaskIndex] : null;
 
   // Load schedule and state from localStorage
@@ -59,6 +59,9 @@ export function FocusClient() {
         setSchedule(parsedSchedule);
         setCompletedTasksCount(savedCompletedTasks ? parseInt(savedCompletedTasks, 10) : 0);
         setTotalFocusedTime(savedFocusedTime ? parseInt(savedFocusedTime, 10) : 0);
+      } else {
+        // If no schedule, redirect to dashboard
+        router.push('/dashboard');
       }
     } catch (error) {
       console.error("Failed to load from localStorage", error);
@@ -83,13 +86,13 @@ export function FocusClient() {
       }
       setCurrentTaskIndex(taskIndex);
       localStorage.setItem('currentTaskIndex', String(taskIndex));
-    } else if (schedule.length > 0 && currentTaskIndex === -1) {
-        // Default to first task if no valid index
+    } else if (schedule.length > 0 && taskIndex === -1) {
+        // Default to first task if no valid index is provided
         router.replace(`/dashboard/focus?taskIndex=0`);
     }
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchParams, isMounted, schedule, router]);
+  }, [searchParams, isMounted, schedule]);
 
   // Save progress to localStorage
   useEffect(() => {
@@ -110,7 +113,7 @@ export function FocusClient() {
         setTimer((prev) => prev - 1);
       }, 1000);
     } else if (timer === 0 && isTimerActive) {
-      handleCompleteTask(false);
+      handleCompleteTask(false); // Auto-complete when timer hits zero
     }
     return () => clearInterval(interval);
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -196,8 +199,8 @@ export function FocusClient() {
       </p>
 
       <div className="mt-10 w-full max-w-sm">
-        {!isTimerStarted && !isTimerActive ? (
-          <Button size="lg" className="w-full h-14 text-lg" onClick={startTask}>
+        {!isTimerStarted || !isTimerActive ? (
+          <Button size="lg" className="w-full h-14 text-lg" onClick={startTask} disabled={isTimerActive}>
             <Play className="mr-2 h-6 w-6" /> Start Task
           </Button>
         ) : (
