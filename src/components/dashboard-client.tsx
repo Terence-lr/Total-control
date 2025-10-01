@@ -14,16 +14,17 @@ import {
   DialogDescription,
   DialogFooter,
   DialogClose,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ProgressCircle } from "@/components/ui/progress-circle";
 import { generateSchedule, GenerateScheduleOutput } from "@/ai/flows/generate-schedule";
 import { addTaskToSchedule } from "@/ai/flows/add-task-to-schedule";
+import { adjustScheduleForDelay } from "@/ai/flows/adjust-schedule-for-delay";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { z } from "zod";
+import { DialogTrigger } from "@radix-ui/react-dialog";
 
 // Schema for a single event, consistent with generate-schedule flow
 const ScheduleEventSchema = z.object({
@@ -44,6 +45,17 @@ const AddTaskToScheduleInputSchema = z.object({
   currentTime: z.string().optional().describe('The current time, to provide context for where to insert the new task (e.g., "11:30 AM").')
 });
 type AddTaskToScheduleInput = z.infer<typeof AddTaskToScheduleInputSchema>;
+
+const AdjustScheduleForDelayInputSchema = z.object({
+  existingSchedule: z
+    .array(ScheduleEventSchema)
+    .describe('The current, chronologically ordered list of schedule events.'),
+  delayDuration: z
+    .string()
+    .describe('The duration of the delay (e.g., "15 minutes", "a half hour").'),
+  currentTime: z.string().optional().describe('The current time, to provide context for which tasks to shift (e.g., "11:30 AM").')
+});
+type AdjustScheduleForDelayInput = z.infer<typeof AdjustScheduleForDelayInputSchema>;
 
 
 const parseDuration = (durationStr: string): number => {
@@ -69,6 +81,7 @@ export function DashboardClient() {
   const [schedule, setSchedule] = useState<GenerateScheduleOutput['schedule'] | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
+  const [isAdjusting, setIsAdjusting] = useState(false);
   const { toast } = useToast();
 
   const [currentTaskIndex, setCurrentTaskIndex] = useState(-1);
@@ -247,6 +260,48 @@ export function DashboardClient() {
     }
   };
 
+  const handleAdjustForDelay = async (delay: string) => {
+    if (!schedule) {
+      toast({
+        title: "No active schedule",
+        description: "Generate a schedule before adjusting it.",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (!delay.trim()) {
+      toast({
+        title: "Delay is empty",
+        description: "Please enter a delay duration (e.g., '15 minutes').",
+        variant: "destructive",
+      });
+      return;
+    }
+    setIsAdjusting(true);
+    try {
+      const result = await adjustScheduleForDelay({
+        existingSchedule: schedule,
+        delayDuration: delay,
+        currentTime: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+      });
+      setSchedule(result.schedule);
+      toast({
+        title: "Schedule Adjusted",
+        description: "Your timeline has been updated for the delay.",
+      });
+    } catch (error) {
+      console.error("Error adjusting schedule:", error);
+      toast({
+        title: "Error",
+        description: "Failed to adjust schedule. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsAdjusting(false);
+    }
+  };
+
+
   const QuickCaptureDialog = ({
     trigger,
     title,
@@ -424,6 +479,9 @@ export function DashboardClient() {
               title="I'm Running Late"
               description="Adjust your schedule because you're running late."
               inputLabel="Delay"
+              onConfirm={handleAdjustForDelay}
+              isLoading={isAdjusting}
+              confirmText={isAdjusting ? "Adjusting..." : "Adjust Schedule"}
             />
             <QuickCaptureDialog
               trigger={
@@ -494,6 +552,8 @@ export function DashboardClient() {
     </div>
   );
 }
+
+    
 
     
 
