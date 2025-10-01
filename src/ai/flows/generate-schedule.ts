@@ -1,7 +1,8 @@
 'use server';
 
 /**
- * @fileOverview A Genkit flow that generates a structured schedule from a user's unstructured plan.
+ * @fileOverview A Genkit flow that generates a structured schedule from a user's unstructured plan,
+ *               handling multi-turn clarifications.
  *
  * - generateSchedule - The function that triggers the schedule generation flow.
  * - GenerateScheduleInput - The input type for the generateSchedule function.
@@ -13,6 +14,10 @@ import {z} from 'genkit';
 
 const GenerateScheduleInputSchema = z.object({
   plan: z.string().describe("The user's unstructured plan for the day."),
+  conversationHistory: z.array(z.object({
+    question: z.string(),
+    answer: z.string(),
+  })).optional().describe("A history of clarifying questions and user answers.")
 });
 export type GenerateScheduleInput = z.infer<typeof GenerateScheduleInputSchema>;
 
@@ -47,7 +52,7 @@ const ClarificationSchema = z.object({
 const ScheduleEventSchema = z.object({
   time: z.string().describe('The start time of the event (e.g., "09:00 AM").'),
   task: z.string().describe('A short description of the task or event.'),
-  duration: z.string().describe('The estimated duration of the event (e.g., "45min", "1hr").'),
+  duration: z.string().describe('The estimated duration of the event (e.g., "45min", \'1hr\').'),
 });
 
 const GenerateScheduleOutputSchema = z.object({
@@ -70,8 +75,21 @@ const parsePlanPrompt = ai.definePrompt({
     input: { schema: GenerateScheduleInputSchema },
     output: { schema: ClarificationSchema },
     prompt: `You are an expert at parsing natural language into structured data.
+
+    {{#if conversationHistory}}
+    You are in a conversation to clarify a user's plan.
+    The user initially said: "{{plan}}"
     
+    Here is the conversation so far:
+    {{#each conversationHistory}}
+    You asked: "{{this.question}}"
+    User answered: "{{this.answer}}"
+    {{/each}}
+
+    Now, re-evaluate the entire conversation and parse the complete plan.
+    {{else}}
     The user said: "{{plan}}"
+    {{/if}}
 
     Your task is to parse their natural language into a structured list of tasks and preferences.
     1.  Identify tasks with a specific time (e.g., "meeting at 10am") and add them to 'fixed_time_tasks'.

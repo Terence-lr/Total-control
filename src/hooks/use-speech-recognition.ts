@@ -88,7 +88,7 @@ export const useSpeechRecognition = (options: SpeechRecognitionOptions = {}) => 
       }
       setInterimTranscript(interim);
       if (final) {
-        setTranscript(prev => ({ ...prev, final: prev.final + final.trim() }));
+        // This is a temporary accumulation. The onend event will finalize it.
       }
     };
 
@@ -101,21 +101,24 @@ export const useSpeechRecognition = (options: SpeechRecognitionOptions = {}) => 
         setError(`Error: ${event.error}`);
       }
       setIsRecording(false);
+      setIsProcessing(false);
       stopTimer();
     };
 
     recognition.onend = () => {
-      // This can be called automatically or by stopRecognition()
-      if (isRecording) {
-         setIsRecording(false);
-         if (transcript.final || interimTranscript) {
-            setIsProcessing(true);
-            setTranscript(prev => ({...prev, final: (prev.final + " " + interimTranscript).trim()}))
-            setInterimTranscript("");
-         }
-      }
-      stopTimer();
-      if(timeoutRef.current) clearTimeout(timeoutRef.current);
+      if (!isRecording) return; // if it was cancelled, do nothing
+
+      setIsRecording(false);
+      setIsProcessing(true); // Start processing
+      
+      // Combine the last interim transcript with the final one
+      setTranscript(prev => {
+        const finalTranscript = (prev.final + ' ' + interimTranscript).trim();
+        return { interim: '', final: finalTranscript };
+      });
+      setInterimTranscript("");
+
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
     };
 
     recognition.start();
@@ -128,14 +131,11 @@ export const useSpeechRecognition = (options: SpeechRecognitionOptions = {}) => 
         }
       }, maxRecordingTime * 1000);
     }
-  }, [continuous, interimResults, isRecording, lang, maxRecordingTime, startTimer, stopTimer, interimTranscript, transcript.final]);
+  }, [continuous, interimResults, isRecording, lang, maxRecordingTime, startTimer, stopTimer, interimTranscript]);
 
   const stopRecognition = useCallback(() => {
     if (recognitionRef.current && isRecording) {
-        recognitionRef.current.stop();
-        setIsRecording(false);
-        setIsProcessing(true);
-        // onend will handle final transcript aggregation
+        recognitionRef.current.stop(); // onend will be triggered
     }
      if (timeoutRef.current) {
       clearTimeout(timeoutRef.current);
@@ -145,24 +145,25 @@ export const useSpeechRecognition = (options: SpeechRecognitionOptions = {}) => 
   const cancelRecognition = useCallback(() => {
      if (recognitionRef.current && isRecording) {
         recognitionRef.current.abort();
-        setIsRecording(false);
-        setIsProcessing(false);
-        setTranscript({ interim: '', final: '' });
-        setInterimTranscript('');
-        setError(null);
-        stopTimer();
      }
       if (timeoutRef.current) {
         clearTimeout(timeoutRef.current);
     }
+    setIsRecording(false);
+    setIsProcessing(false);
+    setTranscript({ interim: '', final: '' });
+    setInterimTranscript('');
+    setError(null);
+    stopTimer();
+
   }, [isRecording, stopTimer]);
   
-  // Cleanup processing state after final transcript is processed
+  // Cleanup processing state after final transcript is passed to parent
   useEffect(() => {
-    if (transcript.final) {
-      setIsProcessing(false);
+    if (transcript.final === '' && isProcessing) {
+        setIsProcessing(false);
     }
-  }, [transcript.final])
+  }, [transcript.final, isProcessing])
 
 
   useEffect(() => {
@@ -189,5 +190,6 @@ export const useSpeechRecognition = (options: SpeechRecognitionOptions = {}) => 
     cancelRecognition,
     error,
     recordingTime,
+    setTranscript, // expose setTranscript to allow parent to clear it
   };
 };

@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { Mic, Plus, Clock, Calendar as CalendarIcon, Zap, Pause, Play, Check, X, Loader2, Award, BrainCircuit, Bot, Sparkles, Book, Lightbulb, ArrowRight, NotebookText, FileInput } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
@@ -17,7 +17,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ProgressCircle } from "@/components/ui/progress-circle";
-import { generateSchedule, GenerateScheduleOutput } from "@/ai/flows/generate-schedule";
+import { generateSchedule, GenerateScheduleInput, GenerateScheduleOutput } from "@/ai/flows/generate-schedule";
 import { addTaskToSchedule } from "@/ai/flows/add-task-to-schedule";
 import { adjustScheduleForDelay } from "@/ai/flows/adjust-schedule-for-delay";
 import { summarizeDay, SummarizeDayOutput } from "@/ai/flows/summarize-day";
@@ -43,31 +43,7 @@ const ScheduleEventSchema = z.object({
 });
 type ScheduleEvent = z.infer<typeof ScheduleEventSchema>;
 
-
-const AddTaskToScheduleInputSchema = z.object({
-  existingSchedule: z
-    .array(ScheduleEventSchema)
-    .describe('The current, chronologically ordered list of schedule events.'),
-  newTask: z
-    .string()
-    .describe(
-      'The new task to add. This can be a simple description like "Call mom" or include timing hints like "add a 15min break after my next meeting".'
-    ),
-  currentTime: z.string().optional().describe('The current time, to provide context for where to insert the new task (e.g., "11:30 AM").')
-});
-type AddTaskToScheduleInput = z.infer<typeof AddTaskToScheduleInputSchema>;
-
-const AdjustScheduleForDelayInputSchema = z.object({
-  existingSchedule: z
-    .array(ScheduleEventSchema)
-    .describe('The current, chronologically ordered list of schedule events.'),
-  delayDuration: z
-    .string()
-    .describe('The duration of the delay (e.g., "15 minutes", "a half hour").'),
-  currentTime: z.string().optional().describe('The current time, to provide context for which tasks to shift (e.g., "11:30 AM").')
-});
-type AdjustScheduleForDelayInput = z.infer<typeof AdjustScheduleForDelayInputSchema>;
-
+type Conversation = { question: string; answer: string };
 
 const parseDuration = (durationStr: string): number => {
   if (!durationStr) return 25 * 60;
@@ -121,6 +97,12 @@ export function DashboardClient() {
   const [isMounted, setIsMounted] = useState(false);
   const [tomorrowsPlan, setTomorrowsPlan] = useState<string | null>(null);
   
+  const [clarificationState, setClarificationState] = useState<{
+    questions: string[];
+    conversation: Conversation[];
+    originalPlan: string;
+  } | null>(null);
+
   const currentTask = schedule && currentTaskIndex !== -1 ? schedule[currentTaskIndex]?.task : "Ready";
   const nextTask = schedule && currentTaskIndex + 1 < schedule.length ? schedule[currentTaskIndex + 1]?.task : "End of schedule";
 
@@ -135,11 +117,19 @@ export function DashboardClient() {
     cancelRecognition,
     error,
     recordingTime,
+    setTranscript,
   } = useSpeechRecognition();
-
+  
+  const processingOrGenerating = isProcessing || isGenerating;
+  
   useEffect(() => {
     if (transcript.final) {
-      handleGenerateSchedule(transcript.final);
+      if (clarificationState) {
+        handleClarificationResponse(transcript.final);
+      } else {
+        handleGenerateSchedule(transcript.final);
+      }
+      setTranscript({ interim: '', final: '' });
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [transcript.final]);
@@ -223,6 +213,7 @@ export function DashboardClient() {
     }
 
     return () => clearInterval(interval);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isTimerActive, timer]);
 
   useEffect(() => {
@@ -311,8 +302,46 @@ export function DashboardClient() {
     if (minutes > 0 || hours === 0) result += `${minutes}m`;
     return result.trim();
   }
+  
+  const callGenerateSchedule = async (input: GenerateScheduleInput) => {
+    setIsGenerating(true);
 
-  const handleGenerateSchedule = async (plan: string) => {
+    try {
+        const result = await generateSchedule(input);
+
+        if (result.needs_clarification && result.clarifying_questions.length > 0) {
+            setClarificationState(prev => ({
+                questions: result.clarifying_questions,
+                conversation: prev?.conversation || [],
+                originalPlan: input.plan,
+            }));
+            setSchedule(null);
+        } else if (result.schedule && result.schedule.length > 0) {
+            setSchedule(result.schedule);
+            startTask(0);
+            setClarificationState(null);
+        } else {
+            toast({
+                title: "Empty Schedule",
+                description: "Could not generate a schedule from your plan. Try being more specific.",
+                variant: "destructive"
+            });
+            setClarificationState(null);
+        }
+    } catch (error) {
+        console.error("Error generating schedule:", error);
+        toast({
+            title: "Error",
+            description: "Failed to generate schedule. Please try again.",
+            variant: "destructive",
+        });
+        setClarificationState(null);
+    } finally {
+        setIsGenerating(false);
+    }
+  };
+
+  const handleGenerateSchedule = (plan: string) => {
     if (!plan.trim()) {
       toast({
         title: "Plan is empty",
@@ -321,7 +350,7 @@ export function DashboardClient() {
       });
       return;
     }
-    setIsGenerating(true);
+    setClarificationState(null);
     setSchedule(null);
     setCurrentTaskIndex(-1);
     setIsTimerActive(false);
@@ -330,37 +359,37 @@ export function DashboardClient() {
     setSummary(null);
     setTomorrowsPlan(null); // Clear tomorrow's plan once it's used
 
-    try {
-      const result = await generateSchedule({ plan });
+    callGenerateSchedule({ plan });
+  };
+  
+  const handleClarificationResponse = (answer: string) => {
+    if (!clarificationState || !answer.trim()) return;
 
-      if (result.needs_clarification && result.clarifying_questions.length > 0) {
-        // TODO: Handle clarification questions in a chat-like UI
-        toast({
-          title: "Need more information",
-          description: result.clarifying_questions[0],
+    const currentQuestion = clarificationState.questions[0];
+    const updatedConversation: Conversation[] = [
+        ...clarificationState.conversation,
+        { question: currentQuestion, answer: answer },
+    ];
+    
+    // Optimistically remove the answered question
+    const remainingQuestions = clarificationState.questions.slice(1);
+
+    setClarificationState(prev => ({
+        ...prev!,
+        conversation: updatedConversation,
+        questions: remainingQuestions,
+    }));
+    
+    // If more questions, just update state and wait for next answer.
+    // If not, call the AI.
+    if (remainingQuestions.length === 0) {
+        callGenerateSchedule({
+            plan: clarificationState.originalPlan,
+            conversationHistory: updatedConversation,
         });
-        setSchedule(null);
-      } else if (result.schedule && result.schedule.length > 0) {
-        setSchedule(result.schedule);
-        startTask(0);
-      } else {
-        toast({
-            title: "Empty Schedule",
-            description: "Could not generate a schedule from your plan. Try being more specific.",
-            variant: "destructive"
-        })
-      }
-    } catch (error) {
-      console.error("Error generating schedule:", error);
-      toast({
-        title: "Error",
-        description: "Failed to generate schedule. Please try again.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsGenerating(false);
     }
   };
+
 
   const handleAddTask = async (newTask: string) => {
     if (!schedule) {
@@ -601,6 +630,17 @@ export function DashboardClient() {
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
+  const handleTextInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter' && planText.trim()) {
+        if (clarificationState) {
+            handleClarificationResponse(planText);
+        } else {
+            handleGenerateSchedule(planText);
+        }
+        setPlanText('');
+    }
+  };
+
   if (!isMounted) {
       return (
         <div className="flex items-center justify-center h-full">
@@ -723,7 +763,8 @@ export function DashboardClient() {
         <Card>
           <CardHeader>
             <CardTitle className="text-2xl font-bold flex items-center gap-2">
-              <Bot className="text-accent-crimson"/> What&apos;s on your plate today?
+              <Bot className="text-accent-crimson"/>
+              {clarificationState ? clarificationState.questions[0] : "What's on your plate today?"}
             </CardTitle>
           </CardHeader>
           <CardContent className="flex flex-col items-center gap-4">
@@ -734,7 +775,7 @@ export function DashboardClient() {
               {isAvailable && (
                 <button
                   onClick={handleMicClick}
-                  disabled={isProcessing || isGenerating}
+                  disabled={processingOrGenerating}
                   className={cn(
                     "relative rounded-full transition-all duration-200 ease-in-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
                     "h-32 w-32 bg-accent-crimson text-white flex items-center justify-center",
@@ -746,7 +787,7 @@ export function DashboardClient() {
                     <div className="absolute inset-0 rounded-full bg-accent-crimson/20 animate-pulse-ring"></div>
                   )}
                   
-                  {(isProcessing || isGenerating) ? (
+                  {processingOrGenerating ? (
                     <Loader2 className="h-16 w-16 animate-spin text-accent-crimson" />
                   ) : (
                     <Mic className={cn("h-16 w-16 transition-colors", isRecording && "text-accent-crimson")} />
@@ -761,8 +802,8 @@ export function DashboardClient() {
                     <Button variant="ghost" size="sm" onClick={cancelRecognition}>Cancel</Button>
                   </div>
                 )}
-                {isProcessing && <p className="text-sm text-muted-foreground">Processing...</p>}
-                {(transcript.interim || transcript.final) && (
+                {isProcessing && <p className="text-sm text-muted-foreground">Thinking...</p>}
+                {(interimTranscript || transcript.final) && (
                    <p className="text-lg fade-in">
                     <span className="text-muted-foreground">{interimTranscript}</span>
                     <span>{transcript.final}</span>
@@ -775,12 +816,13 @@ export function DashboardClient() {
 
             <div className="w-full relative">
                 <Input
-                  placeholder="e.g., Meeting at 10am, finish report by 3pm..."
+                  placeholder={clarificationState ? "Your answer..." : "e.g., Meeting at 10am..."}
                   value={planText}
                   onChange={(e) => setPlanText(e.target.value)}
-                  disabled={isGenerating || isRecording || isProcessing}
+                  onKeyDown={handleTextInputKeyDown}
+                  disabled={processingOrGenerating || isRecording}
                 />
-                {tomorrowsPlan && !planText && (
+                {tomorrowsPlan && !planText && !clarificationState && (
                     <Button
                         variant="ghost"
                         size="sm"
@@ -798,11 +840,18 @@ export function DashboardClient() {
             <Button
               size="lg"
               className="w-full"
-              disabled={!planText || isGenerating || isRecording || isProcessing}
-              onClick={() => handleGenerateSchedule(planText)}
+              disabled={!planText || processingOrGenerating || isRecording}
+              onClick={() => {
+                  if (clarificationState) {
+                      handleClarificationResponse(planText);
+                  } else {
+                      handleGenerateSchedule(planText);
+                  }
+                  setPlanText('');
+              }}
             >
-              {(isGenerating || isProcessing) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              {isGenerating ? 'Generating...' : 'Generate Schedule'}
+              {processingOrGenerating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {clarificationState ? 'Send' : (isGenerating ? 'Generating...' : 'Generate Schedule')}
             </Button>
           </CardContent>
         </Card>
@@ -945,4 +994,3 @@ export function DashboardClient() {
     </>
   );
 }
-
