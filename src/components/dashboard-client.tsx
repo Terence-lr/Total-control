@@ -426,7 +426,7 @@ export function DashboardClient() {
                     <QuickCaptureDialog
                         trigger={
                             <Button variant="secondary" className="w-full">
-                                <Book className="mr-2" /> Reflect & Summarize Day
+                                <Book className="mr-2 h-5 w-5" /> Reflect & Summarize Day
                             </Button>
                         }
                         title="Reflect & Summarize"
@@ -629,3 +629,5 @@ export function DashboardClient() {
     </>
   );
 }
+
+    
