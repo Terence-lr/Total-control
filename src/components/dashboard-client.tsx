@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { Mic, Plus, Clock, Calendar as CalendarIcon, Zap, Pause, Play, Check, X, Loader2, Award, BrainCircuit, Bot, Sparkles, Book, Lightbulb, ArrowRight, NotebookText, FileInput } from "lucide-react";
+import { Mic, Plus, Clock, Calendar as CalendarIcon, Zap, Pause, Play, Check, X, Loader2, Award, BrainCircuit, Bot, Sparkles, Book, Lightbulb, ArrowRight, NotebookText, FileInput, Square } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import {
@@ -772,42 +772,57 @@ export function DashboardClient() {
               {!isAvailable && <p className="text-destructive text-center">Voice input not supported. Please use text input.</p>}
               {error && <p className="text-destructive text-center">{error}</p>}
               
-              {isAvailable && (
+              {isAvailable && !isRecording && !processingOrGenerating && (
                 <button
-                  onClick={handleMicClick}
-                  disabled={processingOrGenerating}
+                  onClick={startRecognition}
                   className={cn(
                     "relative rounded-full transition-all duration-200 ease-in-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
-                    "h-32 w-32 bg-accent-crimson text-white flex items-center justify-center",
-                    isRecording && "bg-white ring-accent-crimson ring-8",
+                    "h-32 w-32 bg-accent-crimson text-white flex items-center justify-center"
                   )}
-                  aria-label={isRecording ? "Stop recording" : "Start recording"}
+                  aria-label="Start recording"
                 >
-                  {isRecording && (
-                    <div className="absolute inset-0 rounded-full bg-accent-crimson/20 animate-pulse-ring"></div>
+                  <Mic className="h-16 w-16" />
+                </button>
+              )}
+
+              {(isRecording || processingOrGenerating) && (
+                 <div
+                  className={cn(
+                    "relative rounded-full transition-all duration-200 ease-in-out",
+                    "h-32 w-32 bg-white flex items-center justify-center",
+                    isRecording && "ring-8 ring-accent-crimson",
                   )}
+                  aria-label={processingOrGenerating ? "Processing" : "Recording"}
+                >
+                  {isRecording && <div className="absolute inset-0 rounded-full bg-accent-crimson/20 animate-pulse-ring"></div>}
                   
                   {processingOrGenerating ? (
                     <Loader2 className="h-16 w-16 animate-spin text-accent-crimson" />
                   ) : (
-                    <Mic className={cn("h-16 w-16 transition-colors", isRecording && "text-accent-crimson")} />
+                    <Mic className="h-16 w-16 text-accent-crimson" />
                   )}
-                </button>
+                </div>
               )}
 
-              <div className="text-center min-h-[4rem] w-full">
-                {isRecording && (
+
+              <div className="text-center min-h-[6rem] w-full">
+                {isRecording ? (
                   <div className="flex flex-col items-center gap-2">
                     <p className="text-sm text-muted-foreground">Recording... ({formatRecordingTime(recordingTime)})</p>
-                    <Button variant="ghost" size="sm" onClick={cancelRecognition}>Cancel</Button>
+                    <div className="flex gap-4">
+                      <Button variant="default" onClick={stopRecognition}>Done</Button>
+                      <Button variant="ghost" size="sm" onClick={cancelRecognition}>Cancel</Button>
+                    </div>
                   </div>
-                )}
-                {isProcessing && <p className="text-sm text-muted-foreground">Thinking...</p>}
-                {(interimTranscript || transcript.final) && (
+                ) : processingOrGenerating ? (
+                   <p className="text-sm text-muted-foreground">Thinking...</p>
+                ) : (interimTranscript || transcript.final) ? (
                    <p className="text-lg fade-in">
                     <span className="text-muted-foreground">{interimTranscript}</span>
                     <span>{transcript.final}</span>
                   </p>
+                ) : (
+                  <p className="text-muted-foreground">Tap the mic to start speaking.</p>
                 )}
               </div>
             </div>
@@ -994,3 +1009,5 @@ export function DashboardClient() {
     </>
   );
 }
+
+    
