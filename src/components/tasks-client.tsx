@@ -9,12 +9,15 @@ import {
   CardDescription,
   CardFooter,
 } from "@/components/ui/card";
-import { CheckSquare, Plus, Loader2 } from "lucide-react";
+import { CheckSquare, Plus, Loader2, ArrowRightCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
+import { useToast } from "@/hooks/use-toast";
+import { addTaskToSchedule } from "@/ai/flows/add-task-to-schedule";
+import { generateSchedule, GenerateScheduleOutput } from "@/ai/flows/generate-schedule";
 
 type Task = {
   id: string;
@@ -33,7 +36,9 @@ export function TasksClient() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [newTaskText, setNewTaskText] = useState("");
   const [isAdding, setIsAdding] = useState(false);
+  const [isAddingToSchedule, setIsAddingToSchedule] = useState<string | null>(null);
   const [isMounted, setIsMounted] = useState(false);
+  const { toast } = useToast();
 
   useEffect(() => {
     setIsMounted(true);
@@ -75,6 +80,45 @@ export function TasksClient() {
       setNewTaskText("");
       setIsAdding(false);
     }, 500);
+  };
+
+  const handleAddTaskToSchedule = async (taskText: string) => {
+    setIsAddingToSchedule(taskText);
+    try {
+        const savedSchedule = localStorage.getItem('schedule');
+        if (!savedSchedule) {
+            toast({
+                title: "No active schedule",
+                description: "Please generate a schedule on the dashboard first.",
+                variant: "destructive",
+            });
+            return;
+        }
+        const schedule: GenerateScheduleOutput['schedule'] = JSON.parse(savedSchedule);
+
+        const result = await addTaskToSchedule({
+            existingSchedule: schedule,
+            newTask: taskText,
+            currentTime: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+        });
+        
+        localStorage.setItem('schedule', JSON.stringify(result.schedule));
+
+        toast({
+            title: "Task Added to Schedule",
+            description: `"${taskText}" has been added to your timeline.`,
+        });
+
+    } catch (error) {
+        console.error("Error adding task to schedule:", error);
+        toast({
+            title: "Error",
+            description: "Failed to add task to schedule. Please try again.",
+            variant: "destructive",
+        });
+    } finally {
+        setIsAddingToSchedule(null);
+    }
   };
 
   const toggleTaskCompletion = (taskId: string) => {
@@ -163,6 +207,19 @@ export function TasksClient() {
               >
                 {task.text}
               </Label>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => handleAddTaskToSchedule(task.text)}
+                disabled={isAddingToSchedule === task.text}
+                aria-label="Add to schedule"
+              >
+                {isAddingToSchedule === task.text ? (
+                    <Loader2 className="h-5 w-5 animate-spin" />
+                ) : (
+                    <ArrowRightCircle className="h-5 w-5 text-muted-foreground hover:text-primary transition-colors" />
+                )}
+              </Button>
             </div>
           ))}
         </div>
