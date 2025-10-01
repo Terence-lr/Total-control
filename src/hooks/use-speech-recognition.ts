@@ -8,6 +8,8 @@ interface SpeechRecognitionOptions {
   continuous?: boolean;
   interimResults?: boolean;
   maxRecordingTime?: number; // in seconds
+  onTranscriptFinal?: (finalTranscript: string) => void;
+  isGenerating?: boolean; // Added to options
 }
 
 interface Transcript {
@@ -21,6 +23,8 @@ export const useSpeechRecognition = (options: SpeechRecognitionOptions = {}) => 
     continuous = true,
     interimResults = true,
     maxRecordingTime = 90, // 1.5 minutes
+    onTranscriptFinal,
+    isGenerating: isParentGenerating = false,
   } = options;
 
   const [isRecording, setIsRecording] = useState(false);
@@ -47,24 +51,28 @@ export const useSpeechRecognition = (options: SpeechRecognitionOptions = {}) => 
     }
   }, []);
 
-  const startTimer = useCallback(() => {
-    setRecordingTime(0);
-    timerRef.current = setInterval(() => {
-      setRecordingTime(prevTime => {
-        if (prevTime + 1 >= maxRecordingTime) {
-            stopRecognition();
-        }
-        return prevTime + 1;
-      });
-    }, 1000);
-  }, [maxRecordingTime]);
-
   const stopTimer = useCallback(() => {
     if (timerRef.current) {
       clearInterval(timerRef.current);
       timerRef.current = null;
     }
   }, []);
+
+  const startTimer = useCallback(() => {
+    setRecordingTime(0);
+    timerRef.current = setInterval(() => {
+      setRecordingTime(prevTime => {
+        if (prevTime + 1 >= maxRecordingTime) {
+            if (recognitionRef.current && isRecording) {
+                recognitionRef.current.stop();
+            }
+        }
+        return prevTime + 1;
+      });
+    }, 1000);
+  }, [maxRecordingTime, isRecording]);
+
+
 
   const stopRecognition = useCallback(() => {
     if (recognitionRef.current && isRecording) {
@@ -120,37 +128,41 @@ export const useSpeechRecognition = (options: SpeechRecognitionOptions = {}) => 
     };
 
     recognition.onend = () => {
-      if (!isRecording) return;
+      if (!isRecordingRef.current) return; // Prevent running on cancel/abort
 
       setIsRecording(false);
-      setIsProcessing(true);
+      setIsProcessing(true); // Show processing indicator immediately
+      stopTimer();
       
       const finalTranscript = (accumulatedFinalTranscript.current + ' ' + interimTranscript.current).trim();
-
-      setTranscript({ interim: '', final: finalTranscript });
+      
+      // Use the callback to pass the final transcript to the parent component
+      if (onTranscriptFinal && finalTranscript) {
+          onTranscriptFinal(finalTranscript);
+      }
       
       accumulatedFinalTranscript.current = '';
       interimTranscript.current = '';
-
-      if (timeoutRef.current) clearTimeout(timeoutRef.current);
-      stopTimer();
-
-      setTimeout(() => setIsProcessing(false), 2000);
     };
 
     recognition.start();
 
-  }, [continuous, interimResults, isRecording, lang, startTimer, stopTimer]);
+  }, [continuous, interimResults, isRecording, lang, startTimer, stopTimer, onTranscriptFinal]);
+
+  const isRecordingRef = useRef(isRecording);
+  useEffect(() => {
+    isRecordingRef.current = isRecording;
+  }, [isRecording]);
 
 
   const cancelRecognition = useCallback(() => {
-     if (recognitionRef.current && isRecording) {
+     if (recognitionRef.current) { // No need to check for isRecording
+        setIsRecording(false); // This will prevent onend from running
         recognitionRef.current.abort();
      }
-      if (timeoutRef.current) {
+    if (timeoutRef.current) {
         clearTimeout(timeoutRef.current);
     }
-    setIsRecording(false);
     setIsProcessing(false);
     setTranscript({ interim: '', final: '' });
     accumulatedFinalTranscript.current = '';
@@ -158,7 +170,15 @@ export const useSpeechRecognition = (options: SpeechRecognitionOptions = {}) => 
     setError(null);
     stopTimer();
 
-  }, [isRecording, stopTimer]);
+  }, [stopTimer]);
+
+  const isGenerating = isProcessing || isParentGenerating;
+  
+  useEffect(() => {
+    if (!isGenerating) {
+        setIsProcessing(false);
+    }
+  }, [isGenerating]);
   
   useEffect(() => {
     // Cleanup on unmount
@@ -172,13 +192,12 @@ export const useSpeechRecognition = (options: SpeechRecognitionOptions = {}) => 
       stopTimer();
     };
   }, [stopTimer]);
-
+  
   return {
     isRecording,
-    isProcessing,
+    isProcessing: isGenerating,
     isAvailable,
     transcript: {interim: transcript.interim, final: transcript.final},
-    interimTranscript: transcript.interim,
     startRecognition,
     stopRecognition,
     cancelRecognition,
@@ -187,5 +206,3 @@ export const useSpeechRecognition = (options: SpeechRecognitionOptions = {}) => 
     setTranscript, // expose setTranscript to allow parent to clear it
   };
 };
-
-    

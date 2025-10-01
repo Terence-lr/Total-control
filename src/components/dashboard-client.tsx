@@ -106,35 +106,32 @@ export function DashboardClient() {
   const currentTask = schedule && currentTaskIndex !== -1 ? schedule[currentTaskIndex]?.task : "Ready";
   const nextTask = schedule && currentTaskIndex + 1 < schedule.length ? schedule[currentTaskIndex + 1]?.task : "End of schedule";
 
+  const handleFinalTranscript = (finalTranscript: string) => {
+    if (clarificationState) {
+        handleClarificationResponse(finalTranscript);
+    } else {
+        handleGenerateSchedule(finalTranscript);
+    }
+  };
+
   const {
     isRecording,
     isProcessing,
     isAvailable,
     transcript,
-    interimTranscript,
     startRecognition,
     stopRecognition,
     cancelRecognition,
     error,
     recordingTime,
     setTranscript,
-  } = useSpeechRecognition();
+  } = useSpeechRecognition({
+      onTranscriptFinal: handleFinalTranscript,
+      isGenerating: isGenerating, // Pass down the generating state
+  });
   
   const processingOrGenerating = isProcessing || isGenerating;
   
-  useEffect(() => {
-    if (transcript.final) {
-      if (clarificationState) {
-        handleClarificationResponse(transcript.final);
-      } else {
-        handleGenerateSchedule(transcript.final);
-      }
-      setTranscript({ interim: '', final: '' });
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [transcript.final]);
-
-
   const scheduleIsComplete = schedule && schedule.length > 0 && currentTaskIndex === -1 && completedTasksCount === schedule.length;
 
   // Load from localStorage on mount
@@ -305,6 +302,7 @@ export function DashboardClient() {
   
   const callGenerateSchedule = async (input: GenerateScheduleInput) => {
     setIsGenerating(true);
+    setTranscript({ interim: '', final: '' }); // Clear transcript
 
     try {
         const result = await generateSchedule(input);
@@ -374,14 +372,17 @@ export function DashboardClient() {
     // Optimistically remove the answered question
     const remainingQuestions = clarificationState.questions.slice(1);
 
-    setClarificationState(prev => ({
-        ...prev!,
-        conversation: updatedConversation,
-        questions: remainingQuestions,
-    }));
+    setClarificationState(prev => {
+        if (!prev) return null;
+        return {
+            ...prev,
+            conversation: updatedConversation,
+            questions: remainingQuestions,
+        }
+    });
     
-    // If more questions, just update state and wait for next answer.
-    // If not, call the AI.
+    setPlanText(''); // Clear the input after submitting answer
+    
     if (remainingQuestions.length === 0) {
         callGenerateSchedule({
             plan: clarificationState.originalPlan,
@@ -764,7 +765,7 @@ export function DashboardClient() {
           <CardHeader>
             <CardTitle className="text-2xl font-bold flex items-center gap-2">
               <Bot className="text-accent-crimson"/>
-              {clarificationState ? clarificationState.questions[0] : "What's on your plate today?"}
+              {clarificationState && clarificationState.questions.length > 0 ? clarificationState.questions[0] : "What's on your plate today?"}
             </CardTitle>
           </CardHeader>
           <CardContent className="flex flex-col items-center gap-4">
@@ -792,7 +793,7 @@ export function DashboardClient() {
                     "h-32 w-32 bg-white flex items-center justify-center",
                     isRecording && "ring-8 ring-accent-crimson",
                   )}
-                  aria-label={processingOrGenerating ? "Processing" : "Recording"}
+                  aria-label={processingOrGenerating ? "Thinking..." : "Recording"}
                 >
                   {isRecording && <div className="absolute inset-0 rounded-full bg-accent-crimson/20 animate-pulse-ring"></div>}
                   
@@ -816,9 +817,9 @@ export function DashboardClient() {
                   </div>
                 ) : processingOrGenerating ? (
                    <p className="text-sm text-muted-foreground">Thinking...</p>
-                ) : (interimTranscript || transcript.final) ? (
+                ) : (transcript.interim || transcript.final) ? (
                    <p className="text-lg fade-in">
-                    <span className="text-muted-foreground">{interimTranscript}</span>
+                    <span className="text-muted-foreground">{transcript.interim}</span>
                     <span>{transcript.final}</span>
                   </p>
                 ) : (
@@ -831,7 +832,7 @@ export function DashboardClient() {
 
             <div className="w-full relative">
                 <Input
-                  placeholder={clarificationState ? "Your answer..." : "e.g., Meeting at 10am..."}
+                  placeholder={clarificationState && clarificationState.questions.length > 0 ? "Your answer..." : "e.g., Meeting at 10am..."}
                   value={planText}
                   onChange={(e) => setPlanText(e.target.value)}
                   onKeyDown={handleTextInputKeyDown}
@@ -855,7 +856,7 @@ export function DashboardClient() {
             <Button
               size="lg"
               className="w-full"
-              disabled={!planText || processingOrGenerating || isRecording}
+              disabled={!planText.trim() || processingOrGenerating || isRecording}
               onClick={() => {
                   if (clarificationState) {
                       handleClarificationResponse(planText);
@@ -1009,3 +1010,5 @@ export function DashboardClient() {
     </>
   );
 }
+
+    
