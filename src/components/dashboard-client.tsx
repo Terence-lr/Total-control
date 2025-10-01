@@ -33,6 +33,7 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion"
 import { Textarea } from "@/components/ui/textarea";
+import { useSpeechRecognition } from "@/hooks/use-speech-recognition";
 
 // Schema for a single event, consistent with generate-schedule flow
 const ScheduleEventSchema = z.object({
@@ -120,6 +121,27 @@ export function DashboardClient() {
   
   const currentTask = schedule && currentTaskIndex !== -1 ? schedule[currentTaskIndex]?.task : "Ready";
   const nextTask = schedule && currentTaskIndex + 1 < schedule.length ? schedule[currentTaskIndex + 1]?.task : "End of schedule";
+
+  const {
+    isRecording,
+    isProcessing,
+    isAvailable,
+    transcript,
+    interimTranscript,
+    startRecognition,
+    stopRecognition,
+    cancelRecognition,
+    error,
+    recordingTime,
+  } = useSpeechRecognition();
+
+  useEffect(() => {
+    if (transcript.final) {
+      handleGenerateSchedule(transcript.final);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [transcript.final]);
+
 
   const scheduleIsComplete = schedule && schedule.length > 0 && currentTaskIndex === -1 && completedTasksCount === schedule.length;
 
@@ -510,7 +532,7 @@ export function DashboardClient() {
     <AccordionItem value={title}>
       <AccordionTrigger className="text-md font-semibold">
         <div className="flex items-center gap-2">
-          <Icon className="h-5 w-5 text-accent" />
+          <Icon className="h-5 w-5 text-accent-crimson" />
           {title}
         </div>
       </AccordionTrigger>
@@ -555,10 +577,24 @@ export function DashboardClient() {
 
   const nowPosition = calculateNowPosition();
 
+  const handleMicClick = () => {
+    if (isRecording) {
+      stopRecognition();
+    } else {
+      startRecognition();
+    }
+  };
+
+  const formatRecordingTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
   if (!isMounted) {
       return (
         <div className="flex items-center justify-center h-full">
-            <Loader2 className="h-8 w-8 animate-spin text-accent" />
+            <Loader2 className="h-8 w-8 animate-spin text-accent-crimson" />
         </div>
       );
   }
@@ -569,7 +605,7 @@ export function DashboardClient() {
     <Dialog open={showSummaryDialog} onOpenChange={setShowSummaryDialog}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2"><Sparkles className="text-accent"/> Your Daily Summary</DialogTitle>
+          <DialogTitle className="flex items-center gap-2"><Sparkles className="text-accent-crimson"/> Your Daily Summary</DialogTitle>
           <DialogDescription>
             Here is a summary of your day based on your completed tasks.
           </DialogDescription>
@@ -577,7 +613,7 @@ export function DashboardClient() {
         <div className="py-4 text-sm text-foreground">
           {isSummarizing ? (
              <div className="flex items-center justify-center h-40">
-                <Loader2 className="h-8 w-8 animate-spin text-accent" />
+                <Loader2 className="h-8 w-8 animate-spin text-accent-crimson" />
              </div>
           ) : summary ? (
             <Accordion type="multiple" defaultValue={['Key Accomplishments', 'Suggestions for Tomorrow']} className="w-full">
@@ -677,16 +713,62 @@ export function DashboardClient() {
         <Card>
           <CardHeader>
             <CardTitle className="text-2xl font-bold flex items-center gap-2">
-              <Bot className="text-accent"/> What's on your plate today?
+              <Bot className="text-accent-crimson"/> What&apos;s on your plate today?
             </CardTitle>
           </CardHeader>
           <CardContent className="flex flex-col items-center gap-4">
+            <div className="flex flex-col items-center justify-center gap-4 w-full">
+              {!isAvailable && <p className="text-destructive text-center">Voice input not supported. Please use text input.</p>}
+              {error && <p className="text-destructive text-center">{error}</p>}
+              
+              {isAvailable && (
+                <button
+                  onClick={handleMicClick}
+                  disabled={isProcessing || isGenerating}
+                  className={cn(
+                    "relative rounded-full transition-all duration-200 ease-in-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+                    "h-32 w-32 bg-accent-crimson text-white flex items-center justify-center",
+                    isRecording && "bg-white ring-accent-crimson ring-8",
+                  )}
+                  aria-label={isRecording ? "Stop recording" : "Start recording"}
+                >
+                  {isRecording && (
+                    <div className="absolute inset-0 rounded-full bg-accent-crimson/20 animate-pulse-ring"></div>
+                  )}
+                  
+                  {(isProcessing || isGenerating) ? (
+                    <Loader2 className="h-16 w-16 animate-spin text-accent-crimson" />
+                  ) : (
+                    <Mic className={cn("h-16 w-16 transition-colors", isRecording && "text-accent-crimson")} />
+                  )}
+                </button>
+              )}
+
+              <div className="text-center min-h-[4rem] w-full">
+                {isRecording && (
+                  <div className="flex flex-col items-center gap-2">
+                    <p className="text-sm text-muted-foreground">Recording... ({formatRecordingTime(recordingTime)})</p>
+                    <Button variant="ghost" size="sm" onClick={cancelRecognition}>Cancel</Button>
+                  </div>
+                )}
+                {isProcessing && <p className="text-sm text-muted-foreground">Processing...</p>}
+                {(transcript.interim || transcript.final) && (
+                   <p className="text-lg fade-in">
+                    <span className="text-muted-foreground">{interimTranscript}</span>
+                    <span>{transcript.final}</span>
+                  </p>
+                )}
+              </div>
+            </div>
+
+            <div className="text-center text-muted-foreground text-sm">or type here...</div>
+
             <div className="w-full relative">
                 <Input
                   placeholder="e.g., Meeting at 10am, finish report by 3pm..."
                   value={planText}
                   onChange={(e) => setPlanText(e.target.value)}
-                  className="h-12"
+                  disabled={isGenerating || isRecording || isProcessing}
                 />
                 {tomorrowsPlan && !planText && (
                     <Button
@@ -706,10 +788,10 @@ export function DashboardClient() {
             <Button
               size="lg"
               className="w-full"
-              disabled={!planText || isGenerating}
+              disabled={!planText || isGenerating || isRecording || isProcessing}
               onClick={() => handleGenerateSchedule(planText)}
             >
-              {isGenerating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {(isGenerating || isProcessing) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               {isGenerating ? 'Generating...' : 'Generate Schedule'}
             </Button>
           </CardContent>
@@ -785,14 +867,14 @@ export function DashboardClient() {
           </CardHeader>
           <CardContent className="grid grid-cols-2 gap-4">
             <div className="flex items-center gap-4">
-                <Award className="h-8 w-8 text-accent"/>
+                <Award className="h-8 w-8 text-accent-crimson"/>
                 <div>
                     <p className="text-2xl font-bold">{completedTasksCount}</p>
                     <p className="text-muted-foreground">Tasks done</p>
                 </div>
             </div>
             <div className="flex items-center gap-4">
-                <BrainCircuit className="h-8 w-8 text-accent"/>
+                <BrainCircuit className="h-8 w-8 text-accent-crimson"/>
                 <div>
                     <p className="text-2xl font-bold">{formatFocusedTime(totalFocusedTime)}</p>
                     <p className="text-muted-foreground">Focused time</p>
@@ -815,8 +897,8 @@ export function DashboardClient() {
                   className="absolute left-0 w-full"
                   style={{ top: `${nowPosition}px`}}
                 >
-                    <div className="relative h-px bg-accent">
-                        <div className="absolute -left-5 -top-2 text-xs font-bold text-accent">Now</div>
+                    <div className="relative h-px bg-accent-crimson">
+                        <div className="absolute -left-5 -top-2 text-xs font-bold text-accent-crimson">Now</div>
                     </div>
                 </div>
               )}
@@ -824,12 +906,12 @@ export function DashboardClient() {
                 {schedule.map((event, index) => (
                   <li key={index} className="relative">
                     <div
-                      className={`absolute -left-2 top-1 h-4 w-4 -translate-x-1/2 rounded-full ${index === currentTaskIndex ? 'bg-accent pulse-red' : (index < currentTaskIndex || (currentTaskIndex === -1 && completedTasksCount > 0) ? 'bg-green-500' : 'bg-border')}`}
+                      className={`absolute -left-2 top-1 h-4 w-4 -translate-x-1/2 rounded-full ${index === currentTaskIndex ? 'bg-accent-crimson pulse-red' : (index < currentTaskIndex || (currentTaskIndex === -1 && completedTasksCount > 0) ? 'bg-green-500' : 'bg-border')}`}
                     >
                      {(index < currentTaskIndex || (currentTaskIndex === -1 && completedTasksCount > 0)) && <Check className="h-4 w-4 text-white" />}
                     </div>
                     <div className="ml-6">
-                      <p className={`font-semibold ${index === currentTaskIndex ? 'text-accent' : ((index < currentTaskIndex || (currentTaskIndex === -1 && completedTasksCount > 0)) ? 'text-muted-foreground line-through' : 'text-foreground')}`}>{event.task}</p>
+                      <p className={`font-semibold ${index === currentTaskIndex ? 'text-accent-crimson' : ((index < currentTaskIndex || (currentTaskIndex === -1 && completedTasksCount > 0)) ? 'text-muted-foreground line-through' : 'text-foreground')}`}>{event.task}</p>
                       <p className="text-sm text-muted-foreground">
                         {event.time} &middot; {event.duration}
                       </p>
@@ -853,3 +935,4 @@ export function DashboardClient() {
     </>
   );
 }
+

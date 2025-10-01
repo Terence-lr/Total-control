@@ -1,3 +1,4 @@
+
 import type {Config} from 'tailwindcss';
 
 export default {
@@ -40,6 +41,7 @@ export default {
         accent: {
           DEFAULT: 'hsl(var(--accent))',
           foreground: 'hsl(var(--accent-foreground))',
+          crimson: 'hsl(var(--accent-crimson))',
         },
         destructive: {
           DEFAULT: 'hsl(var(--destructive))',
