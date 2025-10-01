@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { Mic, Plus, Clock, Calendar as CalendarIcon, Zap, Pause, Check, X, Loader2 } from "lucide-react";
+import { useState, useEffect, useCallback } from "react";
+import { Mic, Plus, Clock, Calendar as CalendarIcon, Zap, Pause, Play, Check, X, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -20,6 +20,7 @@ import { ProgressCircle } from "@/components/ui/progress-circle";
 import { generateSchedule, GenerateScheduleOutput } from "@/ai/flows/generate-schedule";
 import { useToast } from "@/hooks/use-toast";
 
+const initialTaskDuration = 25 * 60; // 25 minutes in seconds
 
 export function DashboardClient() {
   const [isRecording, setIsRecording] = useState(false);
@@ -27,6 +28,65 @@ export function DashboardClient() {
   const [schedule, setSchedule] = useState<GenerateScheduleOutput['schedule'] | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const { toast } = useToast();
+
+  const [timer, setTimer] = useState(initialTaskDuration);
+  const [isTimerActive, setIsTimerActive] = useState(true);
+  const [currentTask, setCurrentTask] = useState("Team Stand-up");
+  const [nextTask, setNextTask] = useState("Work on 'Website Setup' Flow");
+
+  useEffect(() => {
+    let interval: NodeJS.Timeout | undefined;
+
+    if (isTimerActive && timer > 0) {
+      interval = setInterval(() => {
+        setTimer((prevTimer) => prevTimer - 1);
+      }, 1000);
+    } else if (timer === 0) {
+      // Handle task completion, e.g., play sound, show notification
+      console.log("Task completed!");
+      handleNextTask();
+    }
+
+    return () => clearInterval(interval);
+  }, [isTimerActive, timer]);
+
+  const toggleTimer = () => {
+    setIsTimerActive(!isTimerActive);
+  };
+
+  const handleNextTask = useCallback(() => {
+    // This will be replaced with logic to get the next task from the schedule
+    setIsTimerActive(false);
+    setCurrentTask(nextTask);
+    setNextTask("Review PRs");
+    setTimer(initialTaskDuration);
+    // Automatically start the next task if desired
+    // setIsTimerActive(true);
+  }, [nextTask]);
+
+  const handleSkipTask = () => {
+    handleNextTask();
+    toast({
+        title: "Task Skipped",
+        description: `"${currentTask}" was skipped.`,
+    });
+  };
+  
+  const handleCompleteTask = () => {
+    setTimer(0);
+    toast({
+        title: "Task Complete!",
+        description: `You've completed "${currentTask}". Great work!`,
+    });
+  };
+
+  const formatTime = (seconds: number) => {
+    const minutes = Math.floor(seconds / 60);
+    const remainingSeconds = seconds % 60;
+    return `${String(minutes).padStart(2, "0")}:${String(
+      remainingSeconds
+    ).padStart(2, "0")}`;
+  };
 
   const handleGenerateSchedule = async () => {
     if (!planText.trim()) {
@@ -41,6 +101,22 @@ export function DashboardClient() {
     try {
       const result = await generateSchedule({ plan: planText });
       setSchedule(result.schedule);
+      if (result.schedule && result.schedule.length > 0) {
+        // Set up the timer with the first task from the schedule
+        setCurrentTask(result.schedule[0].task);
+        const next = result.schedule.length > 1 ? result.schedule[1].task : "End of schedule";
+        setNextTask(next);
+        
+        // Simple duration parsing (e.g., "45min")
+        const durationStr = result.schedule[0].duration;
+        const durationMinutes = parseInt(durationStr.replace(/\D/g, ''), 10);
+        if (!isNaN(durationMinutes)) {
+            setTimer(durationMinutes * 60);
+        } else {
+            setTimer(initialTaskDuration); // fallback
+        }
+        setIsTimerActive(true);
+      }
     } catch (error) {
       console.error("Error generating schedule:", error);
       toast({
@@ -97,26 +173,27 @@ export function DashboardClient() {
           <CardContent>
             <div className="flex flex-col items-center justify-center space-y-4">
               <div className="relative h-48 w-48">
-                <ProgressCircle value={75} max={100} className="absolute inset-0" />
+                <ProgressCircle value={timer} max={initialTaskDuration} className="absolute inset-0" />
                 <div className="absolute inset-0 flex flex-col items-center justify-center">
-                  <span className="text-4xl font-bold text-primary">15:00</span>
-                  <span className="text-muted-foreground">Team Stand-up</span>
+                  <span className="text-4xl font-bold text-primary">{formatTime(timer)}</span>
+                  <span className="text-muted-foreground">{currentTask}</span>
                 </div>
               </div>
               <div className="flex w-full items-center justify-center space-x-4">
-                <Button variant="outline" size="lg">
-                  <Pause className="mr-2 h-5 w-5" /> Pause
+                <Button variant="outline" size="lg" onClick={toggleTimer}>
+                  {isTimerActive ? <Pause className="mr-2 h-5 w-5" /> : <Play className="mr-2 h-5 w-5" />}
+                  {isTimerActive ? "Pause" : "Resume"}
                 </Button>
-                <Button size="lg">
+                <Button size="lg" onClick={handleCompleteTask}>
                   <Check className="mr-2 h-5 w-5" /> Complete
                 </Button>
-                <Button variant="ghost" size="lg">
+                <Button variant="ghost" size="lg" onClick={handleSkipTask}>
                   <X className="mr-2 h-5 w-5" /> Skip
                 </Button>
               </div>
               <div className="text-center">
                 <span className="text-muted-foreground">Up next: </span>
-                <span className="font-medium text-primary">Work on 'Website Setup' Flow</span>
+                <span className="font-medium text-primary">{nextTask}</span>
               </div>
             </div>
           </CardContent>
@@ -142,7 +219,7 @@ export function DashboardClient() {
               </Button>
             </div>
             <Textarea
-              placeholder="Speak or type your plan... e.g., 'I have a meeting at 10am, need to finish the report by 3pm, and want to go for a run in the evening.'"
+              placeholder="Speak or type your plan... e.g., 'I have a meeting at 10am for 45min, need to finish the report by 3pm, and want to go for a run in the evening for 1 hour.'"
               value={planText}
               onChange={(e) => setPlanText(e.target.value)}
               className="min-h-[120px] text-base"
@@ -224,10 +301,10 @@ export function DashboardClient() {
                 {schedule.map((event, index) => (
                   <li key={index} className="relative">
                     <div
-                      className={`absolute left-4 top-1 h-4 w-4 -translate-x-1/2 rounded-full bg-primary`}
+                      className={`absolute left-4 top-1 h-4 w-4 -translate-x-1/2 rounded-full ${event.task === currentTask ? 'bg-accent pulse-red' : 'bg-primary'}`}
                     ></div>
                     <div className="ml-6">
-                      <p className="font-semibold text-primary">{event.task}</p>
+                      <p className={`font-semibold ${event.task === currentTask ? 'text-accent' : 'text-primary'}`}>{event.task}</p>
                       <p className="text-sm text-muted-foreground">
                         {event.time} &middot; {event.duration}
                       </p>
