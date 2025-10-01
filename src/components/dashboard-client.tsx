@@ -115,7 +115,7 @@ export function DashboardClient() {
   const [completedTasksCount, setCompletedTasksCount] = useState(0);
   const [totalFocusedTime, setTotalFocusedTime] = useState(0); // in seconds
   const [currentTime, setCurrentTime] = useState<GetCurrentTimeOutput | null>(null);
-  const [isMounted, setIsMounted] = useState(false);
+  const [isMounted, setIsMounted]_useState(false);
   const [tomorrowsPlan, setTomorrowsPlan] = useState<string | null>(null);
   
   const currentTask = schedule && currentTaskIndex !== -1 ? schedule[currentTaskIndex]?.task : "Ready";
@@ -609,17 +609,17 @@ export function DashboardClient() {
       <div className="lg:col-span-2 space-y-6">
 
         {scheduleIsComplete && (
-            <Card className="shadow-lg bg-primary text-primary-foreground">
+            <Card>
                  <CardHeader>
                     <CardTitle className="flex items-center gap-3 text-2xl">
                         <Award /> Well done!
                     </CardTitle>
-                    <p className="text-primary-foreground/80 pt-2">You've completed all your tasks for the day. Take a moment to reflect on your accomplishments.</p>
+                    <p className="text-muted-foreground pt-2">You've completed all your tasks for the day. Take a moment to reflect on your accomplishments.</p>
                  </CardHeader>
                  <CardFooter>
                     <QuickCaptureDialog
                         trigger={
-                            <Button variant="secondary" className="w-full">
+                            <Button variant="default" className="w-full">
                                 <Book className="mr-2 h-5 w-5" /> Reflect & Summarize Day
                             </Button>
                         }
@@ -640,7 +640,7 @@ export function DashboardClient() {
         )}
 
         {!scheduleIsComplete && schedule && (
-          <Card className="shadow-lg">
+          <Card>
             <CardHeader>
               <CardTitle>Now Playing</CardTitle>
             </CardHeader>
@@ -649,7 +649,7 @@ export function DashboardClient() {
                 <div className={cn("relative h-48 w-48", timer < 60 && timer > 0 && isTimerActive && "pulse-timer")}>
                   <ProgressCircle value={timer} max={initialTaskDuration} />
                   <div className="absolute inset-0 flex flex-col items-center justify-center p-4">
-                    <span className="text-4xl font-bold text-primary">{formatTime(timer)}</span>
+                    <span className="text-4xl font-bold text-foreground">{formatTime(timer)}</span>
                     <span className="text-muted-foreground text-center truncate w-full block">{currentTask}</span>
                   </div>
                 </div>
@@ -667,14 +667,14 @@ export function DashboardClient() {
                 </div>
                 <div className="text-center">
                   <span className="text-muted-foreground">Up next: </span> 
-                  <span className="font-medium text-primary">{nextTask}</span>
+                  <span className="font-medium">{nextTask}</span>
                 </div>
               </div>
             </CardContent>
           </Card>
         )}
         
-        <Card className="shadow-lg">
+        <Card>
           <CardHeader>
             <CardTitle className="text-2xl font-bold flex items-center gap-2">
               <Bot className="text-accent"/> What's on your plate today?
@@ -771,6 +771,7 @@ export function DashboardClient() {
               title="Morning Dump"
               description="Lay out everything you need to do today."
               inputLabel="Dump"
+              multiline
               onConfirm={handleGenerateSchedule}
               confirmText={isGenerating ? "Generating..." : "Generate"}
               isLoading={isGenerating}
@@ -823,12 +824,12 @@ export function DashboardClient() {
                 {schedule.map((event, index) => (
                   <li key={index} className="relative">
                     <div
-                      className={`absolute -left-2 top-1 h-4 w-4 -translate-x-1/2 rounded-full ${index === currentTaskIndex ? 'bg-accent pulse-red' : (index < currentTaskIndex || (currentTaskIndex === -1 && completedTasksCount > 0) ? 'bg-primary' : 'bg-border')}`}
+                      className={`absolute -left-2 top-1 h-4 w-4 -translate-x-1/2 rounded-full ${index === currentTaskIndex ? 'bg-accent pulse-red' : (index < currentTaskIndex || (currentTaskIndex === -1 && completedTasksCount > 0) ? 'bg-green-500' : 'bg-border')}`}
                     >
-                     {(index < currentTaskIndex || (currentTaskIndex === -1 && completedTasksCount > 0)) && <Check className="h-4 w-4 text-primary-foreground" />}
+                     {(index < currentTaskIndex || (currentTaskIndex === -1 && completedTasksCount > 0)) && <Check className="h-4 w-4 text-white" />}
                     </div>
                     <div className="ml-6">
-                      <p className={`font-semibold ${index === currentTaskIndex ? 'text-accent' : ((index < currentTaskIndex || (currentTaskIndex === -1 && completedTasksCount > 0)) ? 'text-muted-foreground line-through' : 'text-primary')}`}>{event.task}</p>
+                      <p className={`font-semibold ${index === currentTaskIndex ? 'text-accent' : ((index < currentTaskIndex || (currentTaskIndex === -1 && completedTasksCount > 0)) ? 'text-muted-foreground line-through' : 'text-foreground')}`}>{event.task}</p>
                       <p className="text-sm text-muted-foreground">
                         {event.time} &middot; {event.duration}
                       </p>
