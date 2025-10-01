@@ -205,7 +205,7 @@ export function DashboardClient() {
             <div className="flex flex-col items-center justify-center space-y-4">
               <div className="relative h-48 w-48">
                 <ProgressCircle value={timer} max={initialTaskDuration} />
-                <div className="absolute inset-0 flex flex-col items-center justify-center p-4">
+                <div className="absolute inset-0 flex flex-col items-center justify-center p-8">
                   <span className="text-4xl font-bold text-primary">{formatTime(timer)}</span>
                   <span className="text-muted-foreground text-center">{currentTask}</span>
                 </div>
