@@ -572,7 +572,7 @@ export function DashboardClient() {
     <AccordionItem value={title}>
       <AccordionTrigger className="text-md font-semibold">
         <div className="flex items-center gap-2">
-          <Icon className="h-5 w-5 text-accent-crimson" />
+          <Icon className="h-5 w-5 text-accent" />
           {title}
         </div>
       </AccordionTrigger>
@@ -645,7 +645,7 @@ export function DashboardClient() {
   if (!isMounted) {
       return (
         <div className="flex items-center justify-center h-full">
-            <Loader2 className="h-8 w-8 animate-spin text-accent-crimson" />
+            <Loader2 className="h-8 w-8 animate-spin text-accent" />
         </div>
       );
   }
@@ -656,7 +656,7 @@ export function DashboardClient() {
     <Dialog open={showSummaryDialog} onOpenChange={setShowSummaryDialog}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2"><Sparkles className="text-accent-crimson"/> Your Daily Summary</DialogTitle>
+          <DialogTitle className="flex items-center gap-2"><Sparkles className="text-accent"/> Your Daily Summary</DialogTitle>
           <DialogDescription>
             Here is a summary of your day based on your completed tasks.
           </DialogDescription>
@@ -664,7 +664,7 @@ export function DashboardClient() {
         <div className="py-4 text-sm text-foreground">
           {isSummarizing ? (
              <div className="flex items-center justify-center h-40">
-                <Loader2 className="h-8 w-8 animate-spin text-accent-crimson" />
+                <Loader2 className="h-8 w-8 animate-spin text-accent" />
              </div>
           ) : summary ? (
             <Accordion type="multiple" defaultValue={['Key Accomplishments', 'Suggestions for Tomorrow']} className="w-full">
@@ -764,7 +764,7 @@ export function DashboardClient() {
         <Card>
           <CardHeader>
             <CardTitle className="text-2xl font-bold flex items-center gap-2">
-              <Bot className="text-accent-crimson"/>
+              <Bot className="text-accent"/>
               {clarificationState && clarificationState.questions.length > 0 ? clarificationState.questions[0] : "What's on your plate today?"}
             </CardTitle>
           </CardHeader>
@@ -778,7 +778,7 @@ export function DashboardClient() {
                   onClick={startRecognition}
                   className={cn(
                     "relative rounded-full transition-all duration-200 ease-in-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
-                    "h-32 w-32 bg-accent-crimson text-white flex items-center justify-center"
+                    "h-32 w-32 bg-accent text-white flex items-center justify-center"
                   )}
                   aria-label="Start recording"
                 >
@@ -791,16 +791,16 @@ export function DashboardClient() {
                   className={cn(
                     "relative rounded-full transition-all duration-200 ease-in-out",
                     "h-32 w-32 bg-white flex items-center justify-center",
-                    isRecording && "ring-8 ring-accent-crimson",
+                    isRecording && "ring-8 ring-accent",
                   )}
                   aria-label={processingOrGenerating ? "Thinking..." : "Recording"}
                 >
-                  {isRecording && <div className="absolute inset-0 rounded-full bg-accent-crimson/20 animate-pulse-ring"></div>}
+                  {isRecording && <div className="absolute inset-0 rounded-full bg-accent/20 animate-pulse-ring"></div>}
                   
                   {processingOrGenerating ? (
-                    <Loader2 className="h-16 w-16 animate-spin text-accent-crimson" />
+                    <Loader2 className="h-16 w-16 animate-spin text-accent" />
                   ) : (
-                    <Mic className="h-16 w-16 text-accent-crimson" />
+                    <Mic className="h-16 w-16 text-accent" />
                   )}
                 </div>
               )}
@@ -942,14 +942,14 @@ export function DashboardClient() {
           </CardHeader>
           <CardContent className="grid grid-cols-2 gap-4">
             <div className="flex items-center gap-4">
-                <Award className="h-8 w-8 text-accent-crimson"/>
+                <Award className="h-8 w-8 text-accent"/>
                 <div>
                     <p className="text-2xl font-bold">{completedTasksCount}</p>
                     <p className="text-muted-foreground">Tasks done</p>
                 </div>
             </div>
             <div className="flex items-center gap-4">
-                <BrainCircuit className="h-8 w-8 text-accent-crimson"/>
+                <BrainCircuit className="h-8 w-8 text-accent"/>
                 <div>
                     <p className="text-2xl font-bold">{formatFocusedTime(totalFocusedTime)}</p>
                     <p className="text-muted-foreground">Focused time</p>
@@ -972,8 +972,8 @@ export function DashboardClient() {
                   className="absolute left-0 w-full"
                   style={{ top: `${nowPosition}px`}}
                 >
-                    <div className="relative h-px bg-accent-crimson">
-                        <div className="absolute -left-5 -top-2 text-xs font-bold text-accent-crimson">Now</div>
+                    <div className="relative h-px bg-accent">
+                        <div className="absolute -left-5 -top-2 text-xs font-bold text-accent">Now</div>
                     </div>
                 </div>
               )}
@@ -981,12 +981,12 @@ export function DashboardClient() {
                 {schedule.map((event, index) => (
                   <li key={index} className="relative">
                     <div
-                      className={`absolute -left-2 top-1 h-4 w-4 -translate-x-1/2 rounded-full ${index === currentTaskIndex ? 'bg-accent-crimson pulse-red' : (index < currentTaskIndex || (currentTaskIndex === -1 && completedTasksCount > 0) ? 'bg-green-500' : 'bg-border')}`}
+                      className={`absolute -left-2 top-1 h-4 w-4 -translate-x-1/2 rounded-full ${index === currentTaskIndex ? 'bg-accent pulse-red' : (index < currentTaskIndex || (currentTaskIndex === -1 && completedTasksCount > 0) ? 'bg-green-500' : 'bg-border')}`}
                     >
                      {(index < currentTaskIndex || (currentTaskIndex === -1 && completedTasksCount > 0)) && <Check className="h-4 w-4 text-white" />}
                     </div>
                     <div className="ml-6">
-                      <p className={`font-semibold ${index === currentTaskIndex ? 'text-accent-crimson' : ((index < currentTaskIndex || (currentTaskIndex === -1 && completedTasksCount > 0)) ? 'text-muted-foreground line-through' : 'text-foreground')}`}>{event.task}</p>
+                      <p className={`font-semibold ${index === currentTaskIndex ? 'text-accent' : ((index < currentTaskIndex || (currentTaskIndex === -1 && completedTasksCount > 0)) ? 'text-muted-foreground line-through' : 'text-foreground')}`}>{event.task}</p>
                       <p className="text-sm text-muted-foreground">
                         {event.time} &middot; {event.duration}
                       </p>
