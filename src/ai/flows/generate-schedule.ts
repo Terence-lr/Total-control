@@ -16,16 +16,30 @@ const GenerateScheduleInputSchema = z.object({
 });
 export type GenerateScheduleInput = z.infer<typeof GenerateScheduleInputSchema>;
 
-const ScheduleEventSchema = z.object({
-  time: z.string().describe('The start time of the event (e.g., "09:00 AM").'),
-  task: z.string().describe('A short description of the task or event.'),
-  duration: z.string().describe('The estimated duration of the event (e.g., "45min", "1hr").'),
+const ParsedScheduleSchema = z.object({
+    fixed_time_tasks: z.array(z.object({
+        name: z.string(),
+        time: z.string().describe("HH:MM 24-hour format"),
+        duration_minutes: z.number(),
+        type: z.enum(["meeting", "appointment", "routine", "goal", "task", "flow"])
+    })).describe("Tasks that have a specific start time."),
+    flexible_tasks: z.array(z.object({
+        name: z.string(),
+        estimated_duration_minutes: z.number(),
+        priority: z.enum(["high", "medium", "low"]),
+        type: z.enum(["task", "flow", "routine", "goal"])
+    })).describe("Tasks that can be scheduled flexibly."),
+    preferences: z.object({
+        wake_time: z.string().optional().describe("HH:MM 24-hour format"),
+        sleep_time: z.string().optional().describe("HH:MM 24-hour format"),
+        meal_times: z.array(z.string()).optional().describe("e.g., ['breakfast', 'lunch', 'dinner']")
+    })
 });
 
 const GenerateScheduleOutputSchema = z.object({
-  schedule: z
-    .array(ScheduleEventSchema)
-    .describe('A list of structured events for the day.'),
+  needs_clarification: z.boolean(),
+  clarifying_questions: z.array(z.string()),
+  parsed_schedule: ParsedScheduleSchema
 });
 export type GenerateScheduleOutput = z.infer<typeof GenerateScheduleOutputSchema>;
 
@@ -39,19 +53,25 @@ const generateSchedulePrompt = ai.definePrompt({
   name: 'generateSchedulePrompt',
   input: {schema: GenerateScheduleInputSchema},
   output: {schema: GenerateScheduleOutputSchema},
-  prompt: `You are an expert at creating structured schedules from unstructured text. Your task is to convert a user's daily plan into a well-organized schedule of events.
+  prompt: `You are a helpful personal assistant helping someone plan their day.
 
-  The user has provided the following plan:
-  "{{{plan}}}"
+The user said: "{{plan}}"
 
-  Carefully analyze the text to identify all tasks, meetings, and activities. For each item, you must:
-  1.  **Determine the Task:** Extract the core activity (e.g., "Finish report," "Team meeting," "Go for a run").
-  2.  **Assign a Start Time:** If a time is mentioned (e.g., "at 10am," "around 2 PM"), use it. If not, infer a logical start time based on a standard workday (starting around 8:00 AM or 9:00 AM) and the sequence of tasks.
-  3.  **Estimate the Duration:** If a duration is provided (e.g., "for 45 minutes," "1-hour call"), use it. If not, make a reasonable estimation based on the nature of the task (e.g., a standard meeting might be 30-60 minutes, a focused work block might be 90 minutes).
+Your task:
+1. Parse their natural language into structured tasks.
+2. Identify time constraints (meetings, appointments with fixed times).
+3. Estimate duration for tasks without specified time.
+4. Ask clarifying questions ONLY if critical information is missing for scheduling.
 
-  Present the final output as a JSON object containing a 'schedule' array, where each object in the array represents a single event with 'time', 'task', and 'duration' properties. Ensure the schedule is chronologically ordered.
+Extract and return JSON in the specified format.
+
+If the user mentions routines (e.g., "morning workout", "weekly training"), flag those as type: "routine".
+If they mention goals (e.g., "work on my project to launch business"), flag those as type: "goal".
+
+Be conversational and friendly in clarifying questions.
   `,
 });
+
 
 const generateScheduleFlow = ai.defineFlow(
   {
