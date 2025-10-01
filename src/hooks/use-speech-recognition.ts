@@ -119,6 +119,7 @@ export const useSpeechRecognition = (options: SpeechRecognitionOptions = {}) => 
       setInterimTranscript("");
 
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
+      stopTimer();
     };
 
     recognition.start();
