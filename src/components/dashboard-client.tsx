@@ -49,7 +49,7 @@ export function DashboardClient() {
   const [timer, setTimer] = useState(25 * 60);
   const [isTimerActive, setIsTimerActive] = useState(false);
   
-  const currentTask = schedule && currentTaskIndex !== -1 ? schedule[currentTaskIndex]?.task : "Ready when you are";
+  const currentTask = schedule && currentTaskIndex !== -1 ? schedule[currentTaskIndex]?.task : "Ready";
   const nextTask = schedule && currentTaskIndex + 1 < schedule.length ? schedule[currentTaskIndex + 1]?.task : "End of schedule";
 
   useEffect(() => {
@@ -207,7 +207,7 @@ export function DashboardClient() {
                 <ProgressCircle value={timer} max={initialTaskDuration} />
                 <div className="absolute inset-0 flex flex-col items-center justify-center p-8">
                   <span className="text-4xl font-bold text-primary">{formatTime(timer)}</span>
-                  <span className="text-muted-foreground text-center">{currentTask}</span>
+                  <span className="text-muted-foreground text-center truncate w-full px-4">{currentTask}</span>
                 </div>
               </div>
               <div className="flex w-full items-center justify-center space-x-4">
