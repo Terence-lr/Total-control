@@ -20,7 +20,22 @@ import { ProgressCircle } from "@/components/ui/progress-circle";
 import { generateSchedule, GenerateScheduleOutput } from "@/ai/flows/generate-schedule";
 import { useToast } from "@/hooks/use-toast";
 
-const initialTaskDuration = 25 * 60; // 25 minutes in seconds
+const parseDuration = (durationStr: string): number => {
+  const minutesMatch = durationStr.match(/(\d+)\s*min/);
+  if (minutesMatch) {
+    return parseInt(minutesMatch[1], 10) * 60;
+  }
+  const hourMatch = durationStr.match(/(\d+)\s*hr/);
+  if (hourMatch) {
+    return parseInt(hourMatch[1], 10) * 3600;
+  }
+  // Fallback for just a number, assuming minutes
+  const numberMatch = durationStr.match(/^(\d+)$/);
+  if (numberMatch) {
+    return parseInt(numberMatch[1], 10) * 60;
+  }
+  return 25 * 60; // Default to 25 minutes if parsing fails
+};
 
 export function DashboardClient() {
   const [isRecording, setIsRecording] = useState(false);
@@ -29,10 +44,13 @@ export function DashboardClient() {
   const [isGenerating, setIsGenerating] = useState(false);
   const { toast } = useToast();
 
-  const [timer, setTimer] = useState(initialTaskDuration);
-  const [isTimerActive, setIsTimerActive] = useState(true);
-  const [currentTask, setCurrentTask] = useState("Team Stand-up");
-  const [nextTask, setNextTask] = useState("Work on 'Website Setup' Flow");
+  const [currentTaskIndex, setCurrentTaskIndex] = useState(-1);
+  const [initialTaskDuration, setInitialTaskDuration] = useState(25 * 60);
+  const [timer, setTimer] = useState(25 * 60);
+  const [isTimerActive, setIsTimerActive] = useState(false);
+  
+  const currentTask = schedule && currentTaskIndex !== -1 ? schedule[currentTaskIndex]?.task : "Ready when you are";
+  const nextTask = schedule && currentTaskIndex + 1 < schedule.length ? schedule[currentTaskIndex + 1]?.task : "End of schedule";
 
   useEffect(() => {
     let interval: NodeJS.Timeout | undefined;
@@ -41,43 +59,61 @@ export function DashboardClient() {
       interval = setInterval(() => {
         setTimer((prevTimer) => prevTimer - 1);
       }, 1000);
-    } else if (timer === 0) {
-      // Handle task completion, e.g., play sound, show notification
-      console.log("Task completed!");
-      handleNextTask();
+    } else if (timer === 0 && isTimerActive) {
+      handleCompleteTask(false); // Don't show toast on auto-completion
     }
 
     return () => clearInterval(interval);
   }, [isTimerActive, timer]);
 
   const toggleTimer = () => {
-    setIsTimerActive(!isTimerActive);
+    if (currentTaskIndex === -1 && schedule && schedule.length > 0) {
+      // If timer hasn't started yet, start with the first task
+      startTask(0);
+    } else {
+      setIsTimerActive(!isTimerActive);
+    }
   };
+  
+  const startTask = useCallback((index: number) => {
+    if (schedule && index < schedule.length) {
+      setCurrentTaskIndex(index);
+      const taskDuration = parseDuration(schedule[index].duration);
+      setInitialTaskDuration(taskDuration);
+      setTimer(taskDuration);
+      setIsTimerActive(true);
+    } else {
+      // End of schedule
+      setCurrentTaskIndex(-1);
+      setIsTimerActive(false);
+      setTimer(initialTaskDuration);
+      toast({
+          title: "Schedule Complete!",
+          description: "You've completed all tasks for today. Well done!",
+      });
+    }
+  }, [schedule, initialTaskDuration, toast]);
 
   const handleNextTask = useCallback(() => {
-    // This will be replaced with logic to get the next task from the schedule
-    setIsTimerActive(false);
-    setCurrentTask(nextTask);
-    setNextTask("Review PRs");
-    setTimer(initialTaskDuration);
-    // Automatically start the next task if desired
-    // setIsTimerActive(true);
-  }, [nextTask]);
+    startTask(currentTaskIndex + 1);
+  }, [currentTaskIndex, startTask]);
 
   const handleSkipTask = () => {
-    handleNextTask();
     toast({
         title: "Task Skipped",
         description: `"${currentTask}" was skipped.`,
     });
+    handleNextTask();
   };
   
-  const handleCompleteTask = () => {
-    setTimer(0);
-    toast({
-        title: "Task Complete!",
-        description: `You've completed "${currentTask}". Great work!`,
-    });
+  const handleCompleteTask = (showToast = true) => {
+    if (showToast) {
+      toast({
+          title: "Task Complete!",
+          description: `You've completed "${currentTask}". Great work!`,
+      });
+    }
+    handleNextTask();
   };
 
   const formatTime = (seconds: number) => {
@@ -98,24 +134,19 @@ export function DashboardClient() {
       return;
     }
     setIsGenerating(true);
+    setSchedule(null);
+    setCurrentTaskIndex(-1);
     try {
       const result = await generateSchedule({ plan: planText });
       setSchedule(result.schedule);
       if (result.schedule && result.schedule.length > 0) {
-        // Set up the timer with the first task from the schedule
-        setCurrentTask(result.schedule[0].task);
-        const next = result.schedule.length > 1 ? result.schedule[1].task : "End of schedule";
-        setNextTask(next);
-        
-        // Simple duration parsing (e.g., "45min")
-        const durationStr = result.schedule[0].duration;
-        const durationMinutes = parseInt(durationStr.replace(/\D/g, ''), 10);
-        if (!isNaN(durationMinutes)) {
-            setTimer(durationMinutes * 60);
-        } else {
-            setTimer(initialTaskDuration); // fallback
-        }
-        setIsTimerActive(true);
+        startTask(0);
+      } else {
+        toast({
+            title: "Empty Schedule",
+            description: "Could not generate a schedule from your plan. Try being more specific.",
+            variant: "destructive"
+        })
       }
     } catch (error) {
       console.error("Error generating schedule:", error);
@@ -173,21 +204,21 @@ export function DashboardClient() {
           <CardContent>
             <div className="flex flex-col items-center justify-center space-y-4">
               <div className="relative h-48 w-48">
-                <ProgressCircle value={timer} max={initialTaskDuration} className="absolute inset-0" />
+                <ProgressCircle value={timer} max={initialTaskDuration} />
                 <div className="absolute inset-0 flex flex-col items-center justify-center">
                   <span className="text-4xl font-bold text-primary">{formatTime(timer)}</span>
                   <span className="text-muted-foreground">{currentTask}</span>
                 </div>
               </div>
               <div className="flex w-full items-center justify-center space-x-4">
-                <Button variant="outline" size="lg" onClick={toggleTimer}>
+                 <Button variant="outline" size="lg" onClick={toggleTimer} disabled={currentTaskIndex === -1}>
                   {isTimerActive ? <Pause className="mr-2 h-5 w-5" /> : <Play className="mr-2 h-5 w-5" />}
                   {isTimerActive ? "Pause" : "Resume"}
                 </Button>
-                <Button size="lg" onClick={handleCompleteTask}>
+                <Button size="lg" onClick={() => handleCompleteTask()} disabled={currentTaskIndex === -1}>
                   <Check className="mr-2 h-5 w-5" /> Complete
                 </Button>
-                <Button variant="ghost" size="lg" onClick={handleSkipTask}>
+                <Button variant="ghost" size="lg" onClick={handleSkipTask} disabled={currentTaskIndex === -1}>
                   <X className="mr-2 h-5 w-5" /> Skip
                 </Button>
               </div>
@@ -294,17 +325,19 @@ export function DashboardClient() {
           <CardTitle>Today's Timeline</CardTitle>
         </CardHeader>
         <CardContent>
-          {schedule ? (
+          {schedule && schedule.length > 0 ? (
             <div className="relative pl-8">
               <div className="absolute left-4 top-2 h-full w-0.5 -translate-x-1/2 bg-border"></div>
               <ul className="space-y-10">
                 {schedule.map((event, index) => (
                   <li key={index} className="relative">
                     <div
-                      className={`absolute left-4 top-1 h-4 w-4 -translate-x-1/2 rounded-full ${event.task === currentTask ? 'bg-accent pulse-red' : 'bg-primary'}`}
-                    ></div>
+                      className={`absolute left-4 top-1 h-4 w-4 -translate-x-1/2 rounded-full ${index === currentTaskIndex ? 'bg-accent pulse-red' : (index < currentTaskIndex ? 'bg-primary' : 'bg-border')}`}
+                    >
+                     {index < currentTaskIndex && <Check className="h-4 w-4 text-primary-foreground" />}
+                    </div>
                     <div className="ml-6">
-                      <p className={`font-semibold ${event.task === currentTask ? 'text-accent' : 'text-primary'}`}>{event.task}</p>
+                      <p className={`font-semibold ${index === currentTaskIndex ? 'text-accent' : (index < currentTaskIndex ? 'text-muted-foreground line-through' : 'text-primary')}`}>{event.task}</p>
                       <p className="text-sm text-muted-foreground">
                         {event.time} &middot; {event.duration}
                       </p>
