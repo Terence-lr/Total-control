@@ -78,7 +78,7 @@ export function DashboardClient() {
           <CardContent>
             <div className="flex flex-col items-center justify-center space-y-4">
               <div className="relative h-48 w-48">
-                <ProgressCircle value={75} max={100} />
+                <ProgressCircle value={75} max={100} className="absolute inset-0" />
                 <div className="absolute inset-0 flex flex-col items-center justify-center">
                   <span className="text-4xl font-bold text-primary">15:00</span>
                   <span className="text-muted-foreground">Team Stand-up</span>
