@@ -4,7 +4,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { Mic, Plus, Clock, Calendar as CalendarIcon, Zap, Pause, Play, Check, X, Loader2, Award, BrainCircuit, Bot, Sparkles, Book, Lightbulb, ArrowRight, NotebookText } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import {
   Dialog,
@@ -662,11 +661,11 @@ export function DashboardClient() {
             </CardTitle>
           </CardHeader>
           <CardContent className="flex flex-col items-center gap-4">
-            <Textarea
-              placeholder="Speak or type your plan... e.g., 'I have a meeting at 10am for 45min, need to finish the report by 3pm, and want to go for a run in the evening for 1 hour.'"
+            <Input
+              placeholder="e.g., Meeting at 10am, finish report by 3pm, run in the evening"
               value={planText}
               onChange={(e) => setPlanText(e.target.value)}
-              className="min-h-[120px] text-base"
+              className="text-base h-12"
             />
             <Button
               size="lg"
