@@ -662,14 +662,14 @@ export function DashboardClient() {
           </CardHeader>
           <CardContent className="flex flex-col items-center gap-4">
             <Input
-              placeholder="e.g., Meeting at 10am, finish report by 3pm, run in the evening"
+              placeholder="e.g., Meeting at 10am, finish report by 3pm..."
               value={planText}
               onChange={(e) => setPlanText(e.target.value)}
-              className="text-base h-12"
+              className="h-12"
             />
             <Button
               size="lg"
-              className="w-full bg-primary hover:bg-primary/90"
+              className="w-full"
               disabled={!planText || isGenerating}
               onClick={() => handleGenerateSchedule(planText)}
             >
@@ -816,5 +816,3 @@ export function DashboardClient() {
     </>
   );
 }
-
-    
