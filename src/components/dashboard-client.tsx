@@ -1,7 +1,8 @@
+
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Mic, Plus, Clock, Calendar as CalendarIcon, Zap, Pause, Play, Check, X, Loader2 } from "lucide-react";
+import { Mic, Plus, Clock, Calendar as CalendarIcon, Zap, Pause, Play, Check, X, Loader2, Award, BrainCircuit } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -10,9 +11,9 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
   DialogDescription,
   DialogFooter,
+  DialogTrigger,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -48,6 +49,8 @@ export function DashboardClient() {
   const [initialTaskDuration, setInitialTaskDuration] = useState(25 * 60);
   const [timer, setTimer] = useState(25 * 60);
   const [isTimerActive, setIsTimerActive] = useState(false);
+  const [completedTasksCount, setCompletedTasksCount] = useState(0);
+  const [totalFocusedTime, setTotalFocusedTime] = useState(0); // in seconds
   
   const currentTask = schedule && currentTaskIndex !== -1 ? schedule[currentTaskIndex]?.task : "Ready";
   const nextTask = schedule && currentTaskIndex + 1 < schedule.length ? schedule[currentTaskIndex + 1]?.task : "End of schedule";
@@ -99,6 +102,7 @@ export function DashboardClient() {
   }, [currentTaskIndex, startTask]);
 
   const handleSkipTask = () => {
+    if(currentTaskIndex === -1) return;
     toast({
         title: "Task Skipped",
         description: `"${currentTask}" was skipped.`,
@@ -107,12 +111,15 @@ export function DashboardClient() {
   };
   
   const handleCompleteTask = (showToast = true) => {
+    if(currentTaskIndex === -1) return;
     if (showToast) {
       toast({
           title: "Task Complete!",
           description: `You've completed "${currentTask}". Great work!`,
       });
     }
+    setCompletedTasksCount(prev => prev + 1);
+    setTotalFocusedTime(prev => prev + initialTaskDuration);
     handleNextTask();
   };
 
@@ -123,6 +130,15 @@ export function DashboardClient() {
       remainingSeconds
     ).padStart(2, "0")}`;
   };
+
+  const formatFocusedTime = (seconds: number) => {
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    let result = '';
+    if (hours > 0) result += `${hours}h `;
+    if (minutes > 0 || hours === 0) result += `${minutes}m`;
+    return result.trim();
+  }
 
   const handleGenerateSchedule = async () => {
     if (!planText.trim()) {
@@ -136,6 +152,10 @@ export function DashboardClient() {
     setIsGenerating(true);
     setSchedule(null);
     setCurrentTaskIndex(-1);
+    setIsTimerActive(false);
+    setCompletedTasksCount(0);
+    setTotalFocusedTime(0);
+
     try {
       const result = await generateSchedule({ plan: planText });
       setSchedule(result.schedule);
@@ -205,9 +225,9 @@ export function DashboardClient() {
             <div className="flex flex-col items-center justify-center space-y-4">
               <div className="relative h-48 w-48">
                 <ProgressCircle value={timer} max={initialTaskDuration} />
-                <div className="absolute inset-0 flex flex-col items-center justify-center p-8">
+                <div className="absolute inset-0 flex flex-col items-center justify-center p-14">
                   <span className="text-4xl font-bold text-primary">{formatTime(timer)}</span>
-                  <span className="text-muted-foreground text-center truncate w-full px-4">{currentTask}</span>
+                  <span className="text-muted-foreground text-center truncate w-full block">{currentTask}</span>
                 </div>
               </div>
               <div className="flex w-full items-center justify-center space-x-4">
@@ -223,9 +243,31 @@ export function DashboardClient() {
                 </Button>
               </div>
               <div className="text-center">
-                <span className="text-muted-foreground">Up next: </span>
+                <span className="text-muted-foreground">Up next: </span> 
                 <span className="font-medium text-primary">{nextTask}</span>
               </div>
+            </div>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardHeader>
+            <CardTitle>Quick Stats</CardTitle>
+          </CardHeader>
+          <CardContent className="grid grid-cols-2 gap-4">
+            <div className="flex items-center gap-4">
+                <Award className="h-8 w-8 text-accent"/>
+                <div>
+                    <p className="text-2xl font-bold">{completedTasksCount}</p>
+                    <p className="text-muted-foreground">Tasks done</p>
+                </div>
+            </div>
+            <div className="flex items-center gap-4">
+                <BrainCircuit className="h-8 w-8 text-accent"/>
+                <div>
+                    <p className="text-2xl font-bold">{formatFocusedTime(totalFocusedTime)}</p>
+                    <p className="text-muted-foreground">Focused time</p>
+                </div>
             </div>
           </CardContent>
         </Card>
