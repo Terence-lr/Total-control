@@ -2,7 +2,8 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { Mic, Plus, Clock, Calendar as CalendarIcon, Zap, Pause, Play, Check, X, Loader2, Award, BrainCircuit, Bot, Sparkles, Book, Lightbulb, ArrowRight, NotebookText, FileInput, Square } from "lucide-react";
+import Link from "next/link";
+import { Mic, Plus, Clock, Calendar as CalendarIcon, Zap, Pause, Play, Check, X, Loader2, Award, BrainCircuit, Bot, Sparkles, Book, Lightbulb, ArrowRight, NotebookText, FileInput, Square, PlayCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import {
@@ -16,7 +17,6 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ProgressCircle } from "@/components/ui/progress-circle";
 import { generateSchedule, GenerateScheduleInput, GenerateScheduleOutput } from "@/ai/flows/generate-schedule";
 import { addTaskToSchedule } from "@/ai/flows/add-task-to-schedule";
 import { adjustScheduleForDelay } from "@/ai/flows/adjust-schedule-for-delay";
@@ -34,6 +34,8 @@ import {
 } from "@/components/ui/accordion"
 import { Textarea } from "@/components/ui/textarea";
 import { useSpeechRecognition } from "@/hooks/use-speech-recognition";
+import { useRouter } from "next/navigation";
+
 
 // Schema for a single event, consistent with generate-schedule flow
 const ScheduleEventSchema = z.object({
@@ -86,13 +88,10 @@ export function DashboardClient() {
   const [summary, setSummary] = useState<SummarizeDayOutput | null>(null);
   const [showSummaryDialog, setShowSummaryDialog] = useState(false);
   const { toast } = useToast();
+  const router = useRouter();
 
   const [currentTaskIndex, setCurrentTaskIndex] = useState(-1);
-  const [initialTaskDuration, setInitialTaskDuration] = useState(25 * 60);
-  const [timer, setTimer] = useState(25 * 60);
-  const [isTimerActive, setIsTimerActive] = useState(false);
   const [completedTasksCount, setCompletedTasksCount] = useState(0);
-  const [totalFocusedTime, setTotalFocusedTime] = useState(0); // in seconds
   const [currentTime, setCurrentTime] = useState<GetCurrentTimeOutput | null>(null);
   const [isMounted, setIsMounted] = useState(false);
   const [tomorrowsPlan, setTomorrowsPlan] = useState<string | null>(null);
@@ -102,10 +101,7 @@ export function DashboardClient() {
     conversation: Conversation[];
     originalPlan: string;
   } | null>(null);
-
-  const currentTask = schedule && currentTaskIndex !== -1 ? schedule[currentTaskIndex]?.task : "Ready";
-  const nextTask = schedule && currentTaskIndex + 1 < schedule.length ? schedule[currentTaskIndex + 1]?.task : "End of schedule";
-
+  
   const {
     isRecording,
     isProcessing,
@@ -131,7 +127,6 @@ export function DashboardClient() {
   const processingOrGenerating = isProcessing || isGenerating;
   
   const scheduleIsComplete = schedule && schedule.length > 0 && currentTaskIndex === -1 && completedTasksCount === schedule.length;
-  const isTimerStarted = currentTaskIndex !== -1;
 
   // Load from localStorage on mount
   useEffect(() => {
@@ -140,9 +135,7 @@ export function DashboardClient() {
       const savedSchedule = localStorage.getItem('schedule');
       const savedCurrentTaskIndex = localStorage.getItem('currentTaskIndex');
       const savedCompletedTasks = localStorage.getItem('completedTasksCount');
-      const savedFocusedTime = localStorage.getItem('totalFocusedTime');
       const savedTomorrowsPlan = localStorage.getItem('tomorrowsPlan');
-
 
       if (savedTomorrowsPlan) {
         setTomorrowsPlan(savedTomorrowsPlan);
@@ -153,19 +146,9 @@ export function DashboardClient() {
         setSchedule(parsedSchedule);
         
         const taskIndex = savedCurrentTaskIndex ? parseInt(savedCurrentTaskIndex, 10) : -1;
-        
-        const firstTaskIndex = parsedSchedule.length > 0 ? 0 : -1;
-        setCurrentTaskIndex(taskIndex === -1 && firstTaskIndex !== -1 ? firstTaskIndex : taskIndex);
-        
-        const taskDuration = taskIndex !== -1 && taskIndex < parsedSchedule.length 
-          ? parseDuration(parsedSchedule[taskIndex].duration)
-          : (parsedSchedule.length > 0 ? parseDuration(parsedSchedule[0].duration) : 25 * 60);
-
-        setInitialTaskDuration(taskDuration);
-        setTimer(taskDuration);
+        setCurrentTaskIndex(taskIndex);
 
         setCompletedTasksCount(savedCompletedTasks ? parseInt(savedCompletedTasks, 10) : 0);
-        setTotalFocusedTime(savedFocusedTime ? parseInt(savedFocusedTime, 10) : 0);
       }
     } catch (error) {
       console.error("Failed to load from localStorage", error);
@@ -180,12 +163,10 @@ export function DashboardClient() {
         localStorage.setItem('schedule', JSON.stringify(schedule));
         localStorage.setItem('currentTaskIndex', String(currentTaskIndex));
         localStorage.setItem('completedTasksCount', String(completedTasksCount));
-        localStorage.setItem('totalFocusedTime', String(totalFocusedTime));
       } else {
         localStorage.removeItem('schedule');
         localStorage.removeItem('currentTaskIndex');
         localStorage.removeItem('completedTasksCount');
-        localStorage.removeItem('totalFocusedTime');
       }
 
       if (tomorrowsPlan) {
@@ -197,23 +178,8 @@ export function DashboardClient() {
     } catch (error) {
       console.error("Failed to save to localStorage", error);
     }
-  }, [schedule, currentTaskIndex, completedTasksCount, totalFocusedTime, isMounted, tomorrowsPlan]);
+  }, [schedule, currentTaskIndex, completedTasksCount, isMounted, tomorrowsPlan]);
 
-
-  useEffect(() => {
-    let interval: NodeJS.Timeout | undefined;
-
-    if (isTimerActive && timer > 0) {
-      interval = setInterval(() => {
-        setTimer((prevTimer) => prevTimer - 1);
-      }, 1000);
-    } else if (timer === 0 && isTimerActive) {
-      handleCompleteTask(false); // Don't show toast on auto-completion
-    }
-
-    return () => clearInterval(interval);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isTimerActive, timer]);
 
   useEffect(() => {
     const fetchTime = async () => {
@@ -230,78 +196,6 @@ export function DashboardClient() {
     return () => clearInterval(timeInterval);
   }, []);
 
-  const toggleTimer = () => {
-    if (!isTimerStarted && schedule && schedule.length > 0) {
-        // This case is handled by the "Start" button now
-        return;
-    }
-    setIsTimerActive(!isTimerActive);
-  };
-  
-  const startTask = useCallback((index: number) => {
-    if (schedule && index < schedule.length) {
-      setCurrentTaskIndex(index);
-      const taskDuration = parseDuration(schedule[index].duration);
-      setInitialTaskDuration(taskDuration);
-      setTimer(taskDuration);
-      setIsTimerActive(true);
-    } else {
-      // End of schedule
-      setCurrentTaskIndex(-1);
-      setIsTimerActive(false);
-      if (schedule && schedule.length > 0) {
-        setCompletedTasksCount(schedule.length); // Mark all as completed
-        toast({
-            title: "Schedule Complete!",
-            description: "You've completed all tasks for today. Well done!",
-        });
-      }
-    }
-  }, [schedule, toast]);
-
-
-  const handleNextTask = useCallback(() => {
-    startTask(currentTaskIndex + 1);
-  }, [currentTaskIndex, startTask]);
-
-  const handleSkipTask = () => {
-    if(currentTaskIndex === -1) return;
-    toast({
-        title: "Task Skipped",
-        description: `"${currentTask}" was skipped.`,
-    });
-    handleNextTask();
-  };
-  
-  const handleCompleteTask = (showToast = true) => {
-    if(currentTaskIndex === -1) return;
-    if (showToast) {
-      toast({
-          title: "Task Complete!",
-          description: `You've completed "${currentTask}". Great work!`,
-      });
-    }
-    setCompletedTasksCount(prev => prev + 1);
-    setTotalFocusedTime(prev => prev + (initialTaskDuration - timer)); // More accurate time
-    handleNextTask();
-  };
-
-  const formatTime = (seconds: number) => {
-    const minutes = Math.floor(seconds / 60);
-    const remainingSeconds = seconds % 60;
-    return `${String(minutes).padStart(2, "0")}:${String(
-      remainingSeconds
-    ).padStart(2, "0")}`;
-  };
-
-  const formatFocusedTime = (seconds: number) => {
-    const hours = Math.floor(seconds / 3600);
-    const minutes = Math.floor((seconds % 3600) / 60);
-    let result = '';
-    if (hours > 0) result += `${hours}h `;
-    if (minutes > 0 || hours === 0) result += `${minutes}m`;
-    return result.trim();
-  }
   
   const callGenerateSchedule = useCallback(async (input: GenerateScheduleInput) => {
     setIsGenerating(true);
@@ -319,13 +213,9 @@ export function DashboardClient() {
             setSchedule(null);
         } else if (result.schedule && result.schedule.length > 0) {
             setSchedule(result.schedule);
-            const firstTaskDuration = parseDuration(result.schedule[0].duration);
-            setInitialTaskDuration(firstTaskDuration);
-            setTimer(firstTaskDuration);
             setCurrentTaskIndex(0); 
-            setIsTimerActive(false);
-
             setClarificationState(null);
+            router.push('/dashboard/focus?taskIndex=0');
         } else {
             toast({
                 title: "Empty Schedule",
@@ -345,7 +235,7 @@ export function DashboardClient() {
     } finally {
         setIsGenerating(false);
     }
-  }, [setTranscript, toast]);
+  }, [setTranscript, toast, router]);
 
   const handleGenerateSchedule = useCallback((plan: string) => {
     if (!plan.trim()) {
@@ -359,9 +249,7 @@ export function DashboardClient() {
     setClarificationState(null);
     setSchedule(null);
     setCurrentTaskIndex(-1);
-    setIsTimerActive(false);
     setCompletedTasksCount(0);
-    setTotalFocusedTime(0);
     setSummary(null);
     setTomorrowsPlan(null); // Clear tomorrow's plan once it's used
 
@@ -636,6 +524,14 @@ export function DashboardClient() {
     }
   };
 
+  const formatTime = (seconds: number) => {
+    const minutes = Math.floor(seconds / 60);
+    const remainingSeconds = seconds % 60;
+    return `${String(minutes).padStart(2, "0")}:${String(
+      remainingSeconds
+    ).padStart(2, "0")}`;
+  };
+
   if (!isMounted) {
       return (
         <div className="flex items-center justify-center h-full">
@@ -719,54 +615,20 @@ export function DashboardClient() {
                  </CardFooter>
             </Card>
         )}
-
-        {!scheduleIsComplete && schedule && (
+        
+        {schedule && !scheduleIsComplete && (
           <Card>
             <CardHeader>
-              <CardTitle>Now Playing</CardTitle>
+              <CardTitle>Focus Mode</CardTitle>
+              <CardContent className="flex justify-center items-center pt-6">
+                <Button asChild variant="default" size="lg">
+                  <Link href={`/dashboard/focus?taskIndex=${currentTaskIndex}`}>
+                    <PlayCircle className="mr-2 h-5 w-5" />
+                    {currentTaskIndex > 0 ? "Resume Day" : "Start Day"}
+                  </Link>
+                </Button>
+              </CardContent>
             </CardHeader>
-            <CardContent>
-              <div className="flex flex-col items-center justify-center space-y-4">
-                <div className={cn("relative h-48 w-48", timer < 60 && timer > 0 && isTimerActive && "pulse-timer")}>
-                  <ProgressCircle value={initialTaskDuration - timer} max={initialTaskDuration} />
-                  <div className="absolute inset-0 flex flex-col items-center justify-center p-4">
-                    <span className="text-4xl font-bold text-foreground">
-                      {formatTime(timer)}
-                    </span>
-                    <span className="text-muted-foreground text-center truncate w-full block">
-                      {isTimerStarted ? currentTask : "Ready"}
-                    </span>
-                  </div>
-                </div>
-
-                {!isTimerStarted && currentTaskIndex !== -1 ? (
-                    <Button size="lg" className="w-48" onClick={() => startTask(currentTaskIndex)}>
-                        <Play className="mr-2 h-5 w-5" /> Start
-                    </Button>
-                ) : (
-                    <div className="flex w-full items-center justify-center space-x-4">
-                      <Button variant="outline" size="lg" onClick={toggleTimer} disabled={currentTaskIndex === -1}>
-                        {isTimerActive ? <Pause className="mr-2 h-5 w-5" /> : <Play className="mr-2 h-5 w-5" />}
-                        {isTimerActive ? "Pause" : "Resume"}
-                      </Button>
-                      <Button size="lg" onClick={() => handleCompleteTask()} disabled={currentTaskIndex === -1}>
-                        <Check className="mr-2 h-5 w-5" /> Complete
-                      </Button>
-                      <Button variant="ghost" size="lg" onClick={handleSkipTask} disabled={currentTaskIndex === -1}>
-                        <X className="mr-2 h-5 w-5" /> Skip
-                      </Button>
-                    </div>
-                )}
-              </div>
-            </CardContent>
-            <CardFooter className="flex justify-between">
-              <div className="text-sm text-muted-foreground">
-                <p>Up next: {nextTask}</p>
-              </div>
-              <div className="text-sm text-muted-foreground">
-                <p>{completedTasksCount}/{schedule.length} completed</p>
-              </div>
-            </CardFooter>
           </Card>
         )}
 
@@ -795,19 +657,21 @@ export function DashboardClient() {
                     <li
                       key={index}
                       className={cn(
-                        "flex items-start gap-4 p-4 rounded-lg transition-all",
-                        index < currentTaskIndex && "opacity-50",
-                        index === currentTaskIndex && "bg-accent/10 border border-accent",
+                        "flex items-start gap-4 p-4 rounded-lg transition-all border",
+                        index < currentTaskIndex && "opacity-50 bg-muted/50",
+                        index === currentTaskIndex && "bg-accent/10 border-accent",
                       )}
                     >
-                      <div className="flex flex-col items-center">
-                        <span className="font-bold text-sm">{event.time}</span>
-                        <div className="w-px h-6 bg-border my-1"></div>
-                        <span className="text-xs text-muted-foreground">{event.duration}</span>
-                      </div>
-                      <div className="flex-1 pt-1">
-                        <p className="font-medium">{event.task}</p>
-                      </div>
+                      <Link href={`/dashboard/focus?taskIndex=${index}`} className="flex-1 flex items-start gap-4">
+                        <div className="flex flex-col items-center">
+                          <span className="font-bold text-sm">{event.time}</span>
+                          <div className="w-px h-6 bg-border my-1"></div>
+                          <span className="text-xs text-muted-foreground">{event.duration}</span>
+                        </div>
+                        <div className="flex-1 pt-1">
+                          <p className="font-medium">{event.task}</p>
+                        </div>
+                      </Link>
                     </li>
                   ))}
                 </ul>
@@ -946,5 +810,3 @@ export function DashboardClient() {
     </>
   );
 }
-
-    
