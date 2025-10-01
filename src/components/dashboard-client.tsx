@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Mic, Plus, Clock, Calendar as CalendarIcon, Zap, Pause, Play, Check, X, Loader2, Award, BrainCircuit, Bot, Sparkles, Book } from "lucide-react";
+import { Mic, Plus, Clock, Calendar as CalendarIcon, Zap, Pause, Play, Check, X, Loader2, Award, BrainCircuit, Bot, Sparkles, Book, Lightbulb, ArrowRight, NotebookText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
@@ -21,7 +21,7 @@ import { ProgressCircle } from "@/components/ui/progress-circle";
 import { generateSchedule, GenerateScheduleOutput } from "@/ai/flows/generate-schedule";
 import { addTaskToSchedule } from "@/ai/flows/add-task-to-schedule";
 import { adjustScheduleForDelay } from "@/ai/flows/adjust-schedule-for-delay";
-import { summarizeDay } from "@/ai/flows/summarize-day";
+import { summarizeDay, SummarizeDayOutput } from "@/ai/flows/summarize-day";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { z } from "zod";
@@ -84,7 +84,7 @@ export function DashboardClient() {
   const [isUpdating, setIsUpdating] = useState(false);
   const [isAdjusting, setIsAdjusting] = useState(false);
   const [isSummarizing, setIsSummarizing] = useState(false);
-  const [summary, setSummary] = useState<string | null>(null);
+  const [summary, setSummary] = useState<SummarizeDayOutput | null>(null);
   const [showSummaryDialog, setShowSummaryDialog] = useState(false);
   const { toast } = useToast();
 
@@ -311,10 +311,11 @@ export function DashboardClient() {
 
   const handleSummarizeDay = async (activities: string) => {
     setIsSummarizing(true);
+    setSummary(null);
+    setShowSummaryDialog(true);
     try {
-      const { summary } = await summarizeDay({ activities });
-      setSummary(summary);
-      setShowSummaryDialog(true);
+      const result = await summarizeDay({ activities });
+      setSummary(result);
     } catch (error) {
       console.error("Error summarizing day:", error);
       toast({
@@ -398,6 +399,24 @@ export function DashboardClient() {
     </Dialog>
     );
   };
+  
+  const SummarySection = ({ title, items, icon: Icon }: { title: string; items: string[]; icon: React.ElementType }) => (
+    <div className="space-y-2">
+      <h3 className="font-semibold flex items-center gap-2 text-md">
+        <Icon className="h-5 w-5 text-accent" />
+        {title}
+      </h3>
+      <ul className="space-y-2 pl-4 text-muted-foreground">
+        {items.map((item, index) => (
+          <li key={index} className="flex items-start gap-3">
+            <ArrowRight className="h-4 w-4 mt-1 shrink-0" />
+            <span>{item}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+
 
   return (
     <>
@@ -410,15 +429,25 @@ export function DashboardClient() {
           </DialogDescription>
         </DialogHeader>
         <div className="py-4 text-sm text-foreground">
-          {summary ? (
-            <div className="space-y-4">
-               {summary.split('\n').map((line, i) => (
-                  <p key={i}>{line}</p>
-                ))}
+          {isSummarizing ? (
+             <div className="flex items-center justify-center h-40">
+                <Loader2 className="h-8 w-8 animate-spin text-accent" />
+             </div>
+          ) : summary ? (
+            <div className="space-y-6">
+                {summary.accomplishments && summary.accomplishments.length > 0 && (
+                    <SummarySection title="Key Accomplishments" items={summary.accomplishments} icon={Award} />
+                )}
+                {summary.learnings && summary.learnings.length > 0 && (
+                    <SummarySection title="Learnings & Insights" items={summary.learnings} icon={Lightbulb} />
+                )}
+                {summary.suggestions && summary.suggestions.length > 0 && (
+                    <SummarySection title="Suggestions for Tomorrow" items={summary.suggestions} icon={NotebookText} />
+                )}
             </div>
           ) : (
-             <div className="flex items-center justify-center">
-                <Loader2 className="h-6 w-6 animate-spin text-accent" />
+             <div className="flex items-center justify-center text-muted-foreground">
+                No summary available.
              </div>
           )}
         </div>
