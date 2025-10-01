@@ -1,4 +1,18 @@
-import { config } from 'dotenv';
+'use server';
+
+/**
+ * @fileOverview A dev server for Genkit.
+ * This file is used to start the Genkit development server.
+ *
+ * To start the server, run:
+ * `npm run genkit:dev`
+ *
+ * To watch for changes and restart the server, run:
+ * `npm run genkit:watch`
+ *
+ */
+
+import {config} from 'dotenv';
 config();
 
 import '@/ai/flows/summarize-day.ts';

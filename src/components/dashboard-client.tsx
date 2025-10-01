@@ -106,13 +106,13 @@ export function DashboardClient() {
   const currentTask = schedule && currentTaskIndex !== -1 ? schedule[currentTaskIndex]?.task : "Ready";
   const nextTask = schedule && currentTaskIndex + 1 < schedule.length ? schedule[currentTaskIndex + 1]?.task : "End of schedule";
 
-  const handleFinalTranscript = (finalTranscript: string) => {
+  const handleFinalTranscript = useCallback((finalTranscript: string) => {
     if (clarificationState) {
         handleClarificationResponse(finalTranscript);
     } else {
         handleGenerateSchedule(finalTranscript);
     }
-  };
+  }, [clarificationState]); // Add clarificationState as a dependency
 
   const {
     isRecording,
@@ -127,7 +127,7 @@ export function DashboardClient() {
     setTranscript,
   } = useSpeechRecognition({
       onTranscriptFinal: handleFinalTranscript,
-      isGenerating: isGenerating, // Pass down the generating state
+      isGenerating: isGenerating,
   });
   
   const processingOrGenerating = isProcessing || isGenerating;
@@ -617,20 +617,6 @@ export function DashboardClient() {
 
   const nowPosition = calculateNowPosition();
 
-  const handleMicClick = () => {
-    if (isRecording) {
-      stopRecognition();
-    } else {
-      startRecognition();
-    }
-  };
-
-  const formatRecordingTime = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
-  };
-
   const handleTextInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' && planText.trim()) {
         if (clarificationState) {
@@ -809,7 +795,7 @@ export function DashboardClient() {
               <div className="text-center min-h-[6rem] w-full">
                 {isRecording ? (
                   <div className="flex flex-col items-center gap-2">
-                    <p className="text-sm text-muted-foreground">Recording... ({formatRecordingTime(recordingTime)})</p>
+                    <p className="text-sm text-muted-foreground">Recording... ({formatTime(recordingTime)})</p>
                     <div className="flex gap-4">
                       <Button variant="default" onClick={stopRecognition}>Done</Button>
                       <Button variant="ghost" size="sm" onClick={cancelRecognition}>Cancel</Button>
@@ -1010,5 +996,3 @@ export function DashboardClient() {
     </>
   );
 }
-
-    
