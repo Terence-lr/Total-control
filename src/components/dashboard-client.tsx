@@ -327,6 +327,25 @@ export function DashboardClient() {
     }
   };
 
+  const handlePlanTomorrow = (plan: string) => {
+    if (!plan.trim()) {
+      toast({
+        title: "Plan is empty",
+        description: "Please enter your plan for tomorrow.",
+        variant: "destructive",
+      });
+      return;
+    }
+    // For now, we'll just show a confirmation.
+    // In the future, this could be saved and loaded the next day.
+    toast({
+        title: "Tomorrow's Plan Noted!",
+        description: "Your plan for tomorrow has been saved. Ready for a productive day!",
+    });
+    // Here you would typically save the plan to a database or local storage
+    console.log("Tomorrow's plan:", plan);
+  }
+
   const QuickCaptureDialog = ({
     trigger,
     title,
@@ -547,6 +566,8 @@ export function DashboardClient() {
               title="Tomorrow Mode"
               description="Plan ahead for your next day."
               inputLabel="Plan"
+              confirmText="Save Plan"
+              onConfirm={handlePlanTomorrow}
             />
             <QuickCaptureDialog
               trigger={
