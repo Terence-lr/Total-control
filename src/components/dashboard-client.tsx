@@ -106,14 +106,6 @@ export function DashboardClient() {
   const currentTask = schedule && currentTaskIndex !== -1 ? schedule[currentTaskIndex]?.task : "Ready";
   const nextTask = schedule && currentTaskIndex + 1 < schedule.length ? schedule[currentTaskIndex + 1]?.task : "End of schedule";
 
-  const handleFinalTranscript = useCallback((finalTranscript: string) => {
-    if (clarificationState) {
-        handleClarificationResponse(finalTranscript);
-    } else {
-        handleGenerateSchedule(finalTranscript);
-    }
-  }, [clarificationState]); // Add clarificationState as a dependency
-
   const {
     isRecording,
     isProcessing,
@@ -126,13 +118,20 @@ export function DashboardClient() {
     recordingTime,
     setTranscript,
   } = useSpeechRecognition({
-      onTranscriptFinal: handleFinalTranscript,
+      onTranscriptFinal: (text) => {
+        if (clarificationState) {
+          handleClarificationResponse(text);
+        } else {
+          handleGenerateSchedule(text);
+        }
+      },
       isGenerating: isGenerating,
   });
   
   const processingOrGenerating = isProcessing || isGenerating;
   
   const scheduleIsComplete = schedule && schedule.length > 0 && currentTaskIndex === -1 && completedTasksCount === schedule.length;
+  const isTimerStarted = currentTaskIndex !== -1;
 
   // Load from localStorage on mount
   useEffect(() => {
@@ -155,13 +154,16 @@ export function DashboardClient() {
         
         const taskIndex = savedCurrentTaskIndex ? parseInt(savedCurrentTaskIndex, 10) : -1;
         
-        if(taskIndex !== -1 && taskIndex < parsedSchedule.length) {
-            const taskDuration = parseDuration(parsedSchedule[taskIndex].duration);
-            setInitialTaskDuration(taskDuration);
-            setTimer(taskDuration);
-        }
+        const firstTaskIndex = parsedSchedule.length > 0 ? 0 : -1;
+        setCurrentTaskIndex(taskIndex === -1 && firstTaskIndex !== -1 ? firstTaskIndex : taskIndex);
+        
+        const taskDuration = taskIndex !== -1 && taskIndex < parsedSchedule.length 
+          ? parseDuration(parsedSchedule[taskIndex].duration)
+          : (parsedSchedule.length > 0 ? parseDuration(parsedSchedule[0].duration) : 25 * 60);
 
-        setCurrentTaskIndex(taskIndex);
+        setInitialTaskDuration(taskDuration);
+        setTimer(taskDuration);
+
         setCompletedTasksCount(savedCompletedTasks ? parseInt(savedCompletedTasks, 10) : 0);
         setTotalFocusedTime(savedFocusedTime ? parseInt(savedFocusedTime, 10) : 0);
       }
@@ -229,12 +231,11 @@ export function DashboardClient() {
   }, []);
 
   const toggleTimer = () => {
-    if (currentTaskIndex === -1 && schedule && schedule.length > 0) {
-      // If timer hasn't started yet, start with the first task
-      startTask(0);
-    } else {
-      setIsTimerActive(!isTimerActive);
+    if (!isTimerStarted && schedule && schedule.length > 0) {
+        // This case is handled by the "Start" button now
+        return;
     }
+    setIsTimerActive(!isTimerActive);
   };
   
   const startTask = useCallback((index: number) => {
@@ -248,14 +249,16 @@ export function DashboardClient() {
       // End of schedule
       setCurrentTaskIndex(-1);
       setIsTimerActive(false);
-      setTimer(initialTaskDuration);
-      setCompletedTasksCount(schedule?.length || 0); // Mark all as completed
-      toast({
-          title: "Schedule Complete!",
-          description: "You've completed all tasks for today. Well done!",
-      });
+      if (schedule && schedule.length > 0) {
+        setCompletedTasksCount(schedule.length); // Mark all as completed
+        toast({
+            title: "Schedule Complete!",
+            description: "You've completed all tasks for today. Well done!",
+        });
+      }
     }
-  }, [schedule, initialTaskDuration, toast]);
+  }, [schedule, toast]);
+
 
   const handleNextTask = useCallback(() => {
     startTask(currentTaskIndex + 1);
@@ -300,7 +303,7 @@ export function DashboardClient() {
     return result.trim();
   }
   
-  const callGenerateSchedule = async (input: GenerateScheduleInput) => {
+  const callGenerateSchedule = useCallback(async (input: GenerateScheduleInput) => {
     setIsGenerating(true);
     setTranscript({ interim: '', final: '' }); // Clear transcript
 
@@ -316,7 +319,12 @@ export function DashboardClient() {
             setSchedule(null);
         } else if (result.schedule && result.schedule.length > 0) {
             setSchedule(result.schedule);
-            startTask(0);
+            const firstTaskDuration = parseDuration(result.schedule[0].duration);
+            setInitialTaskDuration(firstTaskDuration);
+            setTimer(firstTaskDuration);
+            setCurrentTaskIndex(0); 
+            setIsTimerActive(false);
+
             setClarificationState(null);
         } else {
             toast({
@@ -337,9 +345,9 @@ export function DashboardClient() {
     } finally {
         setIsGenerating(false);
     }
-  };
+  }, [setTranscript, toast]);
 
-  const handleGenerateSchedule = (plan: string) => {
+  const handleGenerateSchedule = useCallback((plan: string) => {
     if (!plan.trim()) {
       toast({
         title: "Plan is empty",
@@ -358,9 +366,9 @@ export function DashboardClient() {
     setTomorrowsPlan(null); // Clear tomorrow's plan once it's used
 
     callGenerateSchedule({ plan });
-  };
+  }, [toast, callGenerateSchedule]);
   
-  const handleClarificationResponse = (answer: string) => {
+  const handleClarificationResponse = useCallback((answer: string) => {
     if (!clarificationState || !answer.trim()) return;
 
     const currentQuestion = clarificationState.questions[0];
@@ -389,7 +397,7 @@ export function DashboardClient() {
             conversationHistory: updatedConversation,
         });
     }
-  };
+  }, [clarificationState, callGenerateSchedule]);
 
 
   const handleAddTask = async (newTask: string) => {
@@ -720,279 +728,223 @@ export function DashboardClient() {
             <CardContent>
               <div className="flex flex-col items-center justify-center space-y-4">
                 <div className={cn("relative h-48 w-48", timer < 60 && timer > 0 && isTimerActive && "pulse-timer")}>
-                  <ProgressCircle value={timer} max={initialTaskDuration} />
+                  <ProgressCircle value={initialTaskDuration - timer} max={initialTaskDuration} />
                   <div className="absolute inset-0 flex flex-col items-center justify-center p-4">
-                    <span className="text-4xl font-bold text-foreground">{formatTime(timer)}</span>
-                    <span className="text-muted-foreground text-center truncate w-full block">{currentTask}</span>
+                    <span className="text-4xl font-bold text-foreground">
+                      {formatTime(timer)}
+                    </span>
+                    <span className="text-muted-foreground text-center truncate w-full block">
+                      {isTimerStarted ? currentTask : "Ready"}
+                    </span>
                   </div>
                 </div>
-                <div className="flex w-full items-center justify-center space-x-4">
-                  <Button variant="outline" size="lg" onClick={toggleTimer} disabled={currentTaskIndex === -1}>
-                    {isTimerActive ? <Pause className="mr-2 h-5 w-5" /> : <Play className="mr-2 h-5 w-5" />}
-                    {isTimerActive ? "Pause" : "Resume"}
-                  </Button>
-                  <Button size="lg" onClick={() => handleCompleteTask()} disabled={currentTaskIndex === -1}>
-                    <Check className="mr-2 h-5 w-5" /> Complete
-                  </Button>
-                  <Button variant="ghost" size="lg" onClick={handleSkipTask} disabled={currentTaskIndex === -1}>
-                    <X className="mr-2 h-5 w-5" /> Skip
-                  </Button>
-                </div>
-                <div className="text-center">
-                  <span className="text-muted-foreground">Up next: </span> 
-                  <span className="font-medium">{nextTask}</span>
-                </div>
+
+                {!isTimerStarted && currentTaskIndex !== -1 ? (
+                    <Button size="lg" className="w-48" onClick={() => startTask(currentTaskIndex)}>
+                        <Play className="mr-2 h-5 w-5" /> Start
+                    </Button>
+                ) : (
+                    <div className="flex w-full items-center justify-center space-x-4">
+                      <Button variant="outline" size="lg" onClick={toggleTimer} disabled={currentTaskIndex === -1}>
+                        {isTimerActive ? <Pause className="mr-2 h-5 w-5" /> : <Play className="mr-2 h-5 w-5" />}
+                        {isTimerActive ? "Pause" : "Resume"}
+                      </Button>
+                      <Button size="lg" onClick={() => handleCompleteTask()} disabled={currentTaskIndex === -1}>
+                        <Check className="mr-2 h-5 w-5" /> Complete
+                      </Button>
+                      <Button variant="ghost" size="lg" onClick={handleSkipTask} disabled={currentTaskIndex === -1}>
+                        <X className="mr-2 h-5 w-5" /> Skip
+                      </Button>
+                    </div>
+                )}
               </div>
             </CardContent>
+            <CardFooter className="flex justify-between">
+              <div className="text-sm text-muted-foreground">
+                <p>Up next: {nextTask}</p>
+              </div>
+              <div className="text-sm text-muted-foreground">
+                <p>{completedTasksCount}/{schedule.length} completed</p>
+              </div>
+            </CardFooter>
           </Card>
         )}
-        
+
         <Card>
           <CardHeader>
-            <CardTitle className="text-2xl font-bold flex items-center gap-2">
-              <Bot className="text-accent"/>
-              {clarificationState && clarificationState.questions.length > 0 ? clarificationState.questions[0] : "What's on your plate today?"}
-            </CardTitle>
+            <CardTitle>Today's Timeline</CardTitle>
           </CardHeader>
-          <CardContent className="flex flex-col items-center gap-4">
-            <div className="flex flex-col items-center justify-center gap-4 w-full">
-              {!isAvailable && <p className="text-destructive text-center">Voice input not supported. Please use text input.</p>}
-              {error && <p className="text-destructive text-center">{error}</p>}
-              
-              {isAvailable && !isRecording && !processingOrGenerating && (
-                <button
-                  onClick={startRecognition}
-                  className={cn(
-                    "relative rounded-full transition-all duration-200 ease-in-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
-                    "h-32 w-32 bg-accent text-white flex items-center justify-center"
-                  )}
-                  aria-label="Start recording"
-                >
-                  <Mic className="h-16 w-16" />
-                </button>
-              )}
-
-              {(isRecording || processingOrGenerating) && (
-                 <div
-                  className={cn(
-                    "relative rounded-full transition-all duration-200 ease-in-out",
-                    "h-32 w-32 bg-white flex items-center justify-center",
-                    isRecording && "ring-8 ring-accent",
-                  )}
-                  aria-label={processingOrGenerating ? "Thinking..." : "Recording"}
-                >
-                  {isRecording && <div className="absolute inset-0 rounded-full bg-accent/20 animate-pulse-ring"></div>}
-                  
-                  {processingOrGenerating ? (
-                    <Loader2 className="h-16 w-16 animate-spin text-accent" />
-                  ) : (
-                    <Mic className="h-16 w-16 text-accent" />
-                  )}
-                </div>
-              )}
-
-
-              <div className="text-center min-h-[6rem] w-full">
-                {isRecording ? (
-                  <div className="flex flex-col items-center gap-2">
-                    <p className="text-sm text-muted-foreground">Recording... ({formatTime(recordingTime)})</p>
-                    <div className="flex gap-4">
-                      <Button variant="default" onClick={stopRecognition}>Done</Button>
-                      <Button variant="ghost" size="sm" onClick={cancelRecognition}>Cancel</Button>
-                    </div>
-                  </div>
-                ) : processingOrGenerating ? (
-                   <p className="text-sm text-muted-foreground">Thinking...</p>
-                ) : (transcript.interim || transcript.final) ? (
-                   <p className="text-lg fade-in">
-                    <span className="text-muted-foreground">{transcript.interim}</span>
-                    <span>{transcript.final}</span>
-                  </p>
-                ) : (
-                  <p className="text-muted-foreground">Tap the mic to start speaking.</p>
-                )}
+          <CardContent>
+            {isGenerating ? (
+              <div className="flex justify-center items-center h-40">
+                <Loader2 className="h-8 w-8 animate-spin text-accent" />
               </div>
-            </div>
-
-            <div className="text-center text-muted-foreground text-sm">or type here...</div>
-
-            <div className="w-full relative">
-                <Input
-                  placeholder={clarificationState && clarificationState.questions.length > 0 ? "Your answer..." : "e.g., Meeting at 10am..."}
-                  value={planText}
-                  onChange={(e) => setPlanText(e.target.value)}
-                  onKeyDown={handleTextInputKeyDown}
-                  disabled={processingOrGenerating || isRecording}
-                />
-                {tomorrowsPlan && !planText && !clarificationState && (
-                    <Button
-                        variant="ghost"
-                        size="sm"
-                        className="absolute right-2 top-1/2 -translate-y-1/2"
-                        onClick={() => {
-                            setPlanText(tomorrowsPlan);
-                            setTomorrowsPlan(null); // Clear after loading
-                        }}
+            ) : schedule ? (
+              <div className="relative">
+                 {nowPosition !== null && (
+                    <div
+                        className="absolute left-0 w-full flex items-center"
+                        style={{ top: `${nowPosition}px`, zIndex: 10 }}
                     >
-                        <FileInput className="mr-2 h-4 w-4" />
-                        Load Tomorrow's Plan
-                    </Button>
-                )}
-            </div>
-            <Button
-              size="lg"
-              className="w-full"
-              disabled={!planText.trim() || processingOrGenerating || isRecording}
-              onClick={() => {
-                  if (clarificationState) {
-                      handleClarificationResponse(planText);
-                  } else {
-                      handleGenerateSchedule(planText);
-                  }
-                  setPlanText('');
-              }}
-            >
-              {processingOrGenerating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              {clarificationState ? 'Send' : (isGenerating ? 'Generating...' : 'Generate Schedule')}
-            </Button>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Quick Capture</CardTitle>
-          </CardHeader>
-          <CardContent className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <QuickCaptureDialog
-              trigger={
-                <Button variant="outline" className="flex-col h-24">
-                  <Plus className="h-6 w-6 mb-1" />
-                  Just Add This
-                </Button>
-              }
-              title="Just Add This"
-              description="Quickly add a new task to your schedule."
-              inputLabel="Task"
-              onConfirm={handleAddTask}
-              isLoading={isUpdating}
-              confirmText={isUpdating ? "Adding..." : "Add Task"}
-            />
-            <QuickCaptureDialog
-              trigger={
-                <Button variant="outline" className="flex-col h-24">
-                  <Clock className="h-6 w-6 mb-1" />
-                  I'm Running Late
-                </Button>
-              }
-              title="I'm Running Late"
-              description="Adjust your schedule because you're running late."
-              inputLabel="Delay"
-              onConfirm={handleAdjustForDelay}
-              isLoading={isAdjusting}
-              confirmText={isAdjusting ? "Adjusting..." : "Adjust Schedule"}
-            />
-            <QuickCaptureDialog
-              trigger={
-                <Button variant="outline" className="flex-col h-24">
-                  <CalendarIcon className="h-6 w-6 mb-1" />
-                  Tomorrow Mode
-                </Button>
-              }
-              title="Tomorrow Mode"
-              description="Plan ahead for your next day."
-              inputLabel="Plan"
-              confirmText="Save Plan"
-              onConfirm={handlePlanTomorrow}
-            />
-            <QuickCaptureDialog
-              trigger={
-                <Button variant="outline" className="flex-col h-24 text-center">
-                  <Zap className="h-6 w-6 mb-1" />
-                  Morning Dump
-                </Button>
-              }
-              title="Morning Dump"
-              description="Lay out everything you need to do today."
-              inputLabel="Dump"
-              multiline
-              onConfirm={handleGenerateSchedule}
-              confirmText={isGenerating ? "Generating..." : "Generate"}
-              isLoading={isGenerating}
-            />
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Quick Stats</CardTitle>
-          </CardHeader>
-          <CardContent className="grid grid-cols-2 gap-4">
-            <div className="flex items-center gap-4">
-                <Award className="h-8 w-8 text-accent"/>
-                <div>
-                    <p className="text-2xl font-bold">{completedTasksCount}</p>
-                    <p className="text-muted-foreground">Tasks done</p>
+                        <div className="w-2 h-2 rounded-full bg-accent mr-2"></div>
+                        <div className="h-px flex-grow bg-accent"></div>
+                    </div>
+                 )}
+                <ul className="space-y-4">
+                  {schedule.map((event, index) => (
+                    <li
+                      key={index}
+                      className={cn(
+                        "flex items-start gap-4 p-4 rounded-lg transition-all",
+                        index < currentTaskIndex && "opacity-50",
+                        index === currentTaskIndex && "bg-accent/10 border border-accent",
+                      )}
+                    >
+                      <div className="flex flex-col items-center">
+                        <span className="font-bold text-sm">{event.time}</span>
+                        <div className="w-px h-6 bg-border my-1"></div>
+                        <span className="text-xs text-muted-foreground">{event.duration}</span>
+                      </div>
+                      <div className="flex-1 pt-1">
+                        <p className="font-medium">{event.task}</p>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : (
+                <div className="text-center py-10 text-muted-foreground">
+                    <p>What's on your plate today? Let the AI build your schedule.</p>
                 </div>
-            </div>
-            <div className="flex items-center gap-4">
-                <BrainCircuit className="h-8 w-8 text-accent"/>
-                <div>
-                    <p className="text-2xl font-bold">{formatFocusedTime(totalFocusedTime)}</p>
-                    <p className="text-muted-foreground">Focused time</p>
-                </div>
-            </div>
+            )}
           </CardContent>
         </Card>
       </div>
 
-      <Card className="lg:col-span-1">
-        <CardHeader>
-          <CardTitle>Today's Timeline</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {schedule && schedule.length > 0 ? (
-            <div className="relative pl-6">
-              <div className="absolute left-0 top-1 h-full w-0.5 -translate-x-1/2 bg-border"></div>
-              {nowPosition !== null && (
-                <div 
-                  className="absolute left-0 w-full"
-                  style={{ top: `${nowPosition}px`}}
-                >
-                    <div className="relative h-px bg-accent">
-                        <div className="absolute -left-5 -top-2 text-xs font-bold text-accent">Now</div>
-                    </div>
+      <div className="space-y-6">
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+                <Bot /> AI Assistant
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+             {clarificationState && clarificationState.questions.length > 0 ? (
+                <div className="space-y-3 fade-in">
+                    <Label className="font-semibold">{clarificationState.questions[0]}</Label>
+                     <div className="flex gap-2">
+                        <Input
+                            type="text"
+                            value={planText}
+                            onChange={(e) => setPlanText(e.target.value)}
+                            onKeyDown={handleTextInputKeyDown}
+                            placeholder="Type your answer..."
+                            disabled={processingOrGenerating}
+                            className="text-base"
+                        />
+                         <Button onClick={() => handleClarificationResponse(planText)} disabled={!planText.trim() || processingOrGenerating}>
+                           {processingOrGenerating ? <Loader2 className="animate-spin" /> : <ArrowRight />}
+                         </Button>
+                     </div>
                 </div>
-              )}
-              <ul className="space-y-10">
-                {schedule.map((event, index) => (
-                  <li key={index} className="relative">
-                    <div
-                      className={`absolute -left-2 top-1 h-4 w-4 -translate-x-1/2 rounded-full ${index === currentTaskIndex ? 'bg-accent pulse-red' : (index < currentTaskIndex || (currentTaskIndex === -1 && completedTasksCount > 0) ? 'bg-green-500' : 'bg-border')}`}
-                    >
-                     {(index < currentTaskIndex || (currentTaskIndex === -1 && completedTasksCount > 0)) && <Check className="h-4 w-4 text-white" />}
+             ) : (
+                <div className="space-y-3">
+                    <div className="flex items-center gap-2">
+                        <Input
+                            type="text"
+                            value={transcript.final || transcript.interim || planText}
+                            onChange={(e) => setPlanText(e.target.value)}
+                            onKeyDown={handleTextInputKeyDown}
+                            placeholder={isRecording ? "Recording..." : (processingOrGenerating ? "Thinking..." : "What's on your plate today?")}
+                            disabled={isRecording || processingOrGenerating}
+                            className="text-base"
+                        />
+                        <Button
+                            size="icon"
+                            variant="default"
+                            onClick={isRecording ? stopRecognition : startRecognition}
+                            disabled={!isAvailable || processingOrGenerating}
+                            className={cn(
+                              "bg-accent hover:bg-accent/90 text-accent-foreground",
+                              isRecording && "bg-destructive hover:bg-destructive/90 animate-pulse-ring"
+                            )}
+                        >
+                            {isRecording ? <Square /> : <Mic />}
+                        </Button>
                     </div>
-                    <div className="ml-6">
-                      <p className={`font-semibold ${index === currentTaskIndex ? 'text-accent' : ((index < currentTaskIndex || (currentTaskIndex === -1 && completedTasksCount > 0)) ? 'text-muted-foreground line-through' : 'text-foreground')}`}>{event.task}</p>
-                      <p className="text-sm text-muted-foreground">
-                        {event.time} &middot; {event.duration}
-                      </p>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ) : (
-            <div className="flex flex-col items-center justify-center text-center text-muted-foreground h-full p-8">
-              <CalendarIcon className="h-12 w-12 mb-4" />
-              <p className="font-medium">Your schedule is empty.</p>
-              <p className="text-sm">
-                Generate a schedule from your plan to see your timeline here.
-              </p>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+                     {isRecording && (
+                        <div className="flex justify-between items-center text-sm text-muted-foreground">
+                            <span>Recording... {formatTime(recordingTime)}</span>
+                             <Button variant="ghost" size="sm" onClick={cancelRecognition}>Cancel</Button>
+                        </div>
+                    )}
+                    {error && <p className="text-sm text-destructive">{error}</p>}
+                </div>
+             )}
+
+             {!schedule && !isGenerating && !clarificationState && tomorrowsPlan && (
+                <Button variant="outline" className="w-full" onClick={() => handleGenerateSchedule(tomorrowsPlan)}>
+                    <Sparkles className="mr-2 h-4 w-4"/> Start with tomorrow's plan
+                </Button>
+             )}
+
+             {!schedule && !isGenerating && !clarificationState && (
+                <div className="text-center pt-2">
+                    <Button variant="link" onClick={() => handleGenerateSchedule("I have a dentist appointment at 2pm, need to work out for 30 minutes, study for 2 hours, and want to be in bed by 10pm")}>
+                        Try an example
+                    </Button>
+                </div>
+             )}
+          </CardContent>
+        </Card>
+
+        <Card>
+            <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                    <Zap /> Quick Capture
+                </CardTitle>
+            </CardHeader>
+            <CardContent className="grid grid-cols-2 gap-2">
+                <QuickCaptureDialog
+                    trigger={<Button variant="outline" className="w-full"><Plus className="mr-2" /> Just Add This</Button>}
+                    title="Add a Task"
+                    description="Quickly add a new task to your current schedule. The AI will find the best spot for it."
+                    inputLabel="New Task"
+                    confirmText={isUpdating ? "Adding..." : "Add to Schedule"}
+                    isLoading={isUpdating}
+                    onConfirm={handleAddTask}
+                />
+                <QuickCaptureDialog
+                    trigger={<Button variant="outline" className="w-full"><Clock className="mr-2" /> Running Late</Button>}
+                    title="Running Late?"
+                    description="Enter how late you're running, and the AI will shift your upcoming tasks accordingly."
+                    inputLabel="Delay"
+                    confirmText={isAdjusting ? "Adjusting..." : "Adjust Schedule"}
+                    isLoading={isAdjusting}
+                    onConfirm={handleAdjustForDelay}
+                />
+                <QuickCaptureDialog
+                    trigger={<Button variant="outline" className="w-full"><CalendarIcon className="mr-2" /> Tomorrow Mode</Button>}
+                    title="Plan for Tomorrow"
+                    description="Roughly sketch out your plan for tomorrow. We'll save it and you can generate the full schedule in the morning."
+                    inputLabel="Tomorrow's Plan"
+                    confirmText={"Save Plan"}
+                    onConfirm={handlePlanTomorrow}
+                    multiline
+                />
+                 <Button variant="outline" className="w-full" onClick={() => {
+                     const completedTasks = schedule?.filter((_,i) => i < currentTaskIndex).map(t => t.task).join(', ') || "No tasks completed.";
+                     handleSummarizeDay(`Completed tasks: ${completedTasks}`);
+                 }}>
+                    <Book className="mr-2 h-4 w-4" /> Reflect
+                </Button>
+            </CardContent>
+        </Card>
+
+      </div>
     </div>
     </>
   );
 }
+
+    
