@@ -73,18 +73,22 @@ export const useSpeechRecognition = (options: SpeechRecognitionOptions = {}) => 
   }, [maxRecordingTime, isRecording]);
 
 
+  const isRecordingRef = useRef(isRecording);
+  useEffect(() => {
+    isRecordingRef.current = isRecording;
+  }, [isRecording]);
 
   const stopRecognition = useCallback(() => {
-    if (recognitionRef.current && isRecording) {
+    if (recognitionRef.current && isRecordingRef.current) {
         recognitionRef.current.stop(); // onend will be triggered
     }
      if (timeoutRef.current) {
       clearTimeout(timeoutRef.current);
     }
-  }, [isRecording]);
+  }, []);
 
   const startRecognition = useCallback(() => {
-    if (!recognitionRef.current || isRecording) return;
+    if (!recognitionRef.current || isRecordingRef.current) return;
 
     setError(null);
     setTranscript({ interim: '', final: '' });
@@ -147,13 +151,7 @@ export const useSpeechRecognition = (options: SpeechRecognitionOptions = {}) => 
 
     recognition.start();
 
-  }, [continuous, interimResults, isRecording, lang, startTimer, stopTimer, onTranscriptFinal]);
-
-  const isRecordingRef = useRef(isRecording);
-  useEffect(() => {
-    isRecordingRef.current = isRecording;
-  }, [isRecording]);
-
+  }, [continuous, interimResults, lang, startTimer, stopTimer, onTranscriptFinal]);
 
   const cancelRecognition = useCallback(() => {
      if (recognitionRef.current) { // No need to check for isRecording
