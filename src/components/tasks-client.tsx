@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Card,
   CardHeader,
@@ -30,9 +30,34 @@ const initialTasks: Task[] = [
 ];
 
 export function TasksClient() {
-  const [tasks, setTasks] = useState<Task[]>(initialTasks);
+  const [tasks, setTasks] = useState<Task[]>([]);
   const [newTaskText, setNewTaskText] = useState("");
   const [isAdding, setIsAdding] = useState(false);
+  const [isMounted, setIsMounted] = useState(false);
+
+  useEffect(() => {
+    setIsMounted(true);
+    try {
+      const savedTasks = localStorage.getItem('tasks');
+      if (savedTasks) {
+        setTasks(JSON.parse(savedTasks));
+      } else {
+        setTasks(initialTasks);
+      }
+    } catch (error) {
+      console.error("Failed to load tasks from localStorage", error);
+      setTasks(initialTasks);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!isMounted) return;
+    try {
+      localStorage.setItem('tasks', JSON.stringify(tasks));
+    } catch (error) {
+      console.error("Failed to save tasks to localStorage", error);
+    }
+  }, [tasks, isMounted]);
 
   const handleAddTask = (e: React.FormEvent) => {
     e.preventDefault();
@@ -42,7 +67,7 @@ export function TasksClient() {
     // Simulate API call
     setTimeout(() => {
       const newTask: Task = {
-        id: (tasks.length + 1).toString(),
+        id: new Date().toISOString(), // More robust ID
         text: newTaskText,
         completed: false,
       };
@@ -59,6 +84,28 @@ export function TasksClient() {
       )
     );
   };
+
+  if (!isMounted) {
+    return (
+        <Card>
+            <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                    <CheckSquare className="h-6 w-6" />
+                    Tasks
+                </CardTitle>
+                <CardDescription>
+                    Manage your individual actions here. Add, view, and complete your
+                    tasks for the day.
+                </CardDescription>
+            </CardHeader>
+            <CardContent>
+                <div className="flex items-center justify-center h-40">
+                    <Loader2 className="h-8 w-8 animate-spin text-accent" />
+                </div>
+            </CardContent>
+        </Card>
+    );
+  }
 
   return (
     <Card>
