@@ -2,10 +2,10 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Mic, Plus, Clock, Calendar as CalendarIcon, Zap, Pause, Play, Check, X, Loader2, Award, BrainCircuit } from "lucide-react";
+import { Mic, Plus, Clock, Calendar as CalendarIcon, Zap, Pause, Play, Check, X, Loader2, Award, BrainCircuit, Bot, Sparkles, Book } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -21,6 +21,7 @@ import { ProgressCircle } from "@/components/ui/progress-circle";
 import { generateSchedule, GenerateScheduleOutput } from "@/ai/flows/generate-schedule";
 import { addTaskToSchedule } from "@/ai/flows/add-task-to-schedule";
 import { adjustScheduleForDelay } from "@/ai/flows/adjust-schedule-for-delay";
+import { summarizeDay } from "@/ai/flows/summarize-day";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { z } from "zod";
@@ -82,6 +83,9 @@ export function DashboardClient() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
   const [isAdjusting, setIsAdjusting] = useState(false);
+  const [isSummarizing, setIsSummarizing] = useState(false);
+  const [summary, setSummary] = useState<string | null>(null);
+  const [showSummaryDialog, setShowSummaryDialog] = useState(false);
   const { toast } = useToast();
 
   const [currentTaskIndex, setCurrentTaskIndex] = useState(-1);
@@ -93,6 +97,8 @@ export function DashboardClient() {
   
   const currentTask = schedule && currentTaskIndex !== -1 ? schedule[currentTaskIndex]?.task : "Ready";
   const nextTask = schedule && currentTaskIndex + 1 < schedule.length ? schedule[currentTaskIndex + 1]?.task : "End of schedule";
+
+  const scheduleIsComplete = schedule && schedule.length > 0 && currentTaskIndex === -1 && completedTasksCount === schedule.length;
 
   useEffect(() => {
     let interval: NodeJS.Timeout | undefined;
@@ -129,6 +135,7 @@ export function DashboardClient() {
       setCurrentTaskIndex(-1);
       setIsTimerActive(false);
       setTimer(initialTaskDuration);
+      setCompletedTasksCount(schedule?.length || 0); // Mark all as completed
       toast({
           title: "Schedule Complete!",
           description: "You've completed all tasks for today. Well done!",
@@ -194,6 +201,7 @@ export function DashboardClient() {
     setIsTimerActive(false);
     setCompletedTasksCount(0);
     setTotalFocusedTime(0);
+    setSummary(null);
 
     try {
       const result = await generateSchedule({ plan });
@@ -301,6 +309,23 @@ export function DashboardClient() {
     }
   };
 
+  const handleSummarizeDay = async (activities: string) => {
+    setIsSummarizing(true);
+    try {
+      const { summary } = await summarizeDay({ activities });
+      setSummary(summary);
+      setShowSummaryDialog(true);
+    } catch (error) {
+      console.error("Error summarizing day:", error);
+      toast({
+        title: "Error",
+        description: "Failed to summarize your day. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSummarizing(false);
+    }
+  };
 
   const QuickCaptureDialog = ({
     trigger,
@@ -356,82 +381,111 @@ export function DashboardClient() {
   };
 
   return (
+    <>
+    <Dialog open={showSummaryDialog} onOpenChange={setShowSummaryDialog}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2"><Sparkles className="text-accent"/> Your Daily Summary</DialogTitle>
+          <DialogDescription>
+            Here is a summary of your day based on your completed tasks.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="py-4 text-sm text-foreground">
+          {summary ? (
+            <div className="space-y-4">
+               {summary.split('\n').map((line, i) => (
+                  <p key={i}>{line}</p>
+                ))}
+            </div>
+          ) : (
+             <div className="flex items-center justify-center">
+                <Loader2 className="h-6 w-6 animate-spin text-accent" />
+             </div>
+          )}
+        </div>
+        <DialogFooter>
+          <DialogClose asChild>
+            <Button type="button">Close</Button>
+          </DialogClose>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
       <div className="lg:col-span-2 space-y-6">
-        <Card className="shadow-lg">
-          <CardHeader>
-            <CardTitle>Now Playing</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex flex-col items-center justify-center space-y-4">
-              <div className={cn("relative h-48 w-48", timer < 60 && timer > 0 && isTimerActive && "pulse-timer")}>
-                <ProgressCircle value={timer} max={initialTaskDuration} />
-                <div className="absolute inset-0 flex flex-col items-center justify-center p-4">
-                  <span className="text-4xl font-bold text-primary">{formatTime(timer)}</span>
-                  <span className="text-muted-foreground text-center truncate w-full block">{currentTask}</span>
-                </div>
-              </div>
-              <div className="flex w-full items-center justify-center space-x-4">
-                 <Button variant="outline" size="lg" onClick={toggleTimer} disabled={currentTaskIndex === -1}>
-                  {isTimerActive ? <Pause className="mr-2 h-5 w-5" /> : <Play className="mr-2 h-5 w-5" />}
-                  {isTimerActive ? "Pause" : "Resume"}
-                </Button>
-                <Button size="lg" onClick={() => handleCompleteTask()} disabled={currentTaskIndex === -1}>
-                  <Check className="mr-2 h-5 w-5" /> Complete
-                </Button>
-                <Button variant="ghost" size="lg" onClick={handleSkipTask} disabled={currentTaskIndex === -1}>
-                  <X className="mr-2 h-5 w-5" /> Skip
-                </Button>
-              </div>
-              <div className="text-center">
-                <span className="text-muted-foreground">Up next: </span> 
-                <span className="font-medium text-primary">{nextTask}</span>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        
-        <Card>
-          <CardHeader>
-            <CardTitle>Quick Stats</CardTitle>
-          </CardHeader>
-          <CardContent className="grid grid-cols-2 gap-4">
-            <div className="flex items-center gap-4">
-                <Award className="h-8 w-8 text-accent"/>
-                <div>
-                    <p className="text-2xl font-bold">{completedTasksCount}</p>
-                    <p className="text-muted-foreground">Tasks done</p>
-                </div>
-            </div>
-            <div className="flex items-center gap-4">
-                <BrainCircuit className="h-8 w-8 text-accent"/>
-                <div>
-                    <p className="text-2xl font-bold">{formatFocusedTime(totalFocusedTime)}</p>
-                    <p className="text-muted-foreground">Focused time</p>
-                </div>
-            </div>
-          </CardContent>
-        </Card>
 
+        {scheduleIsComplete && (
+            <Card className="shadow-lg bg-primary text-primary-foreground">
+                 <CardHeader>
+                    <CardTitle className="flex items-center gap-3 text-2xl">
+                        <Award /> Well done!
+                    </CardTitle>
+                    <p className="text-primary-foreground/80 pt-2">You've completed all your tasks for the day. Take a moment to reflect on your accomplishments.</p>
+                 </CardHeader>
+                 <CardFooter>
+                    <QuickCaptureDialog
+                        trigger={
+                            <Button variant="secondary" className="w-full">
+                                <Book className="mr-2" /> Reflect & Summarize Day
+                            </Button>
+                        }
+                        title="Reflect & Summarize"
+                        description="Add any final thoughts, accomplishments, or learnings from your day. The AI will generate a concise summary."
+                        inputLabel="Your Thoughts"
+                        confirmText={isSummarizing ? "Summarizing..." : "Generate Summary"}
+                        isLoading={isSummarizing}
+                        onConfirm={(thoughts) => {
+                            const completedTasks = schedule?.map(t => t.task).join(', ');
+                            const fullContext = `Completed tasks: ${completedTasks}. Additional thoughts: ${thoughts}`;
+                            handleSummarizeDay(fullContext);
+                        }}
+                    />
+                 </CardFooter>
+            </Card>
+        )}
+
+        {!scheduleIsComplete && schedule && (
+          <Card className="shadow-lg">
+            <CardHeader>
+              <CardTitle>Now Playing</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex flex-col items-center justify-center space-y-4">
+                <div className={cn("relative h-48 w-48", timer < 60 && timer > 0 && isTimerActive && "pulse-timer")}>
+                  <ProgressCircle value={timer} max={initialTaskDuration} />
+                  <div className="absolute inset-0 flex flex-col items-center justify-center p-4">
+                    <span className="text-4xl font-bold text-primary">{formatTime(timer)}</span>
+                    <span className="text-muted-foreground text-center truncate w-full block">{currentTask}</span>
+                  </div>
+                </div>
+                <div className="flex w-full items-center justify-center space-x-4">
+                  <Button variant="outline" size="lg" onClick={toggleTimer} disabled={currentTaskIndex === -1}>
+                    {isTimerActive ? <Pause className="mr-2 h-5 w-5" /> : <Play className="mr-2 h-5 w-5" />}
+                    {isTimerActive ? "Pause" : "Resume"}
+                  </Button>
+                  <Button size="lg" onClick={() => handleCompleteTask()} disabled={currentTaskIndex === -1}>
+                    <Check className="mr-2 h-5 w-5" /> Complete
+                  </Button>
+                  <Button variant="ghost" size="lg" onClick={handleSkipTask} disabled={currentTaskIndex === -1}>
+                    <X className="mr-2 h-5 w-5" /> Skip
+                  </Button>
+                </div>
+                <div className="text-center">
+                  <span className="text-muted-foreground">Up next: </span> 
+                  <span className="font-medium text-primary">{nextTask}</span>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+        
         <Card className="shadow-lg">
           <CardHeader>
-            <CardTitle className="text-2xl font-bold">
-              What's on your plate today?
+            <CardTitle className="text-2xl font-bold flex items-center gap-2">
+              <Bot className="text-accent"/> What's on your plate today?
             </CardTitle>
           </CardHeader>
           <CardContent className="flex flex-col items-center gap-4">
-            <div className="relative">
-              <Button
-                size="icon"
-                aria-label="Start recording"
-                className={`h-24 w-24 rounded-full bg-primary text-primary-foreground shadow-lg transition-all duration-300 hover:scale-105 ${
-                  isRecording ? "bg-accent pulse-red" : ""
-                }`}
-                onClick={() => setIsRecording(!isRecording)}
-              >
-                <Mic className="h-10 w-10" />
-              </Button>
-            </div>
             <Textarea
               placeholder="Speak or type your plan... e.g., 'I have a meeting at 10am for 45min, need to finish the report by 3pm, and want to go for a run in the evening for 1 hour.'"
               value={planText}
@@ -510,6 +564,28 @@ export function DashboardClient() {
             />
           </CardContent>
         </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Quick Stats</CardTitle>
+          </CardHeader>
+          <CardContent className="grid grid-cols-2 gap-4">
+            <div className="flex items-center gap-4">
+                <Award className="h-8 w-8 text-accent"/>
+                <div>
+                    <p className="text-2xl font-bold">{completedTasksCount}</p>
+                    <p className="text-muted-foreground">Tasks done</p>
+                </div>
+            </div>
+            <div className="flex items-center gap-4">
+                <BrainCircuit className="h-8 w-8 text-accent"/>
+                <div>
+                    <p className="text-2xl font-bold">{formatFocusedTime(totalFocusedTime)}</p>
+                    <p className="text-muted-foreground">Focused time</p>
+                </div>
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
       <Card className="lg:col-span-1">
@@ -524,12 +600,12 @@ export function DashboardClient() {
                 {schedule.map((event, index) => (
                   <li key={index} className="relative">
                     <div
-                      className={`absolute -left-2 top-1 h-4 w-4 -translate-x-1/2 rounded-full ${index === currentTaskIndex ? 'bg-accent pulse-red' : (index < currentTaskIndex ? 'bg-primary' : 'bg-border')}`}
+                      className={`absolute -left-2 top-1 h-4 w-4 -translate-x-1/2 rounded-full ${index === currentTaskIndex ? 'bg-accent pulse-red' : (index < currentTaskIndex || (currentTaskIndex === -1 && completedTasksCount > 0) ? 'bg-primary' : 'bg-border')}`}
                     >
-                     {index < currentTaskIndex && <Check className="h-4 w-4 text-primary-foreground" />}
+                     {(index < currentTaskIndex || (currentTaskIndex === -1 && completedTasksCount > 0)) && <Check className="h-4 w-4 text-primary-foreground" />}
                     </div>
                     <div className="ml-6">
-                      <p className={`font-semibold ${index === currentTaskIndex ? 'text-accent' : (index < currentTaskIndex ? 'text-muted-foreground line-through' : 'text-primary')}`}>{event.task}</p>
+                      <p className={`font-semibold ${index === currentTaskIndex ? 'text-accent' : ((index < currentTaskIndex || (currentTaskIndex === -1 && completedTasksCount > 0)) ? 'text-muted-foreground line-through' : 'text-primary')}`}>{event.task}</p>
                       <p className="text-sm text-muted-foreground">
                         {event.time} &middot; {event.duration}
                       </p>
@@ -550,11 +626,6 @@ export function DashboardClient() {
         </CardContent>
       </Card>
     </div>
+    </>
   );
 }
-
-    
-
-    
-
-    
