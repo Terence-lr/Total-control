@@ -32,6 +32,7 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion"
+import { Textarea } from "@/components/ui/textarea";
 
 // Schema for a single event, consistent with generate-schedule flow
 const ScheduleEventSchema = z.object({
@@ -454,6 +455,7 @@ export function DashboardClient() {
     confirmText = "Add",
     isLoading = false,
     onConfirm,
+    multiline = false,
   }: {
     trigger: React.ReactNode;
     title: string;
@@ -462,6 +464,7 @@ export function DashboardClient() {
     confirmText?: string;
     isLoading?: boolean;
     onConfirm?: (value: string) => void;
+    multiline?: boolean;
   }) => {
     const [inputValue, setInputValue] = useState("");
 
@@ -479,11 +482,15 @@ export function DashboardClient() {
           <DialogDescription>{description}</DialogDescription>
         </DialogHeader>
         <div className="grid gap-4 py-4">
-          <div className="grid grid-cols-4 items-center gap-4">
-            <Label htmlFor="quick-capture-input" className="text-right">
+          <div className="grid grid-cols-4 items-start gap-4">
+            <Label htmlFor="quick-capture-input" className="text-right pt-2">
               {inputLabel}
             </Label>
-            <Input id="quick-capture-input" className="col-span-3" value={inputValue} onChange={(e) => setInputValue(e.target.value)} disabled={isLoading} />
+            {multiline ? (
+                <Textarea id="quick-capture-input" className="col-span-3" value={inputValue} onChange={(e) => setInputValue(e.target.value)} disabled={isLoading} />
+            ) : (
+                <Input id="quick-capture-input" className="col-span-3" value={inputValue} onChange={(e) => setInputValue(e.target.value)} disabled={isLoading} />
+            )}
           </div>
         </div>
         <DialogFooter>
@@ -621,6 +628,7 @@ export function DashboardClient() {
                         inputLabel="Your Thoughts"
                         confirmText={isSummarizing ? "Summarizing..." : "Generate Summary"}
                         isLoading={isSummarizing}
+                        multiline={true}
                         onConfirm={(thoughts) => {
                             const completedTasks = schedule?.map(t => t.task).join(', ');
                             const fullContext = `Completed tasks: ${completedTasks}. Additional thoughts: ${thoughts}`;
