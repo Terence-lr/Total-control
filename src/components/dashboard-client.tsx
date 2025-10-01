@@ -21,6 +21,7 @@ import { Label } from "@/components/ui/label";
 import { ProgressCircle } from "@/components/ui/progress-circle";
 import { generateSchedule, GenerateScheduleOutput } from "@/ai/flows/generate-schedule";
 import { useToast } from "@/hooks/use-toast";
+import { cn } from "@/lib/utils";
 
 const parseDuration = (durationStr: string): number => {
   const minutesMatch = durationStr.match(/(\d+)\s*min/);
@@ -120,7 +121,7 @@ export function DashboardClient() {
       });
     }
     setCompletedTasksCount(prev => prev + 1);
-    setTotalFocusedTime(prev => prev + initialTaskDuration);
+    setTotalFocusedTime(prev => prev + (initialTaskDuration - timer)); // More accurate time
     handleNextTask();
   };
 
@@ -237,7 +238,7 @@ export function DashboardClient() {
           </CardHeader>
           <CardContent>
             <div className="flex flex-col items-center justify-center space-y-4">
-              <div className="relative h-48 w-48">
+              <div className={cn("relative h-48 w-48", timer < 60 && timer > 0 && isTimerActive && "pulse-timer")}>
                 <ProgressCircle value={timer} max={initialTaskDuration} />
                 <div className="absolute inset-0 flex flex-col items-center justify-center p-14">
                   <span className="text-4xl font-bold text-primary">{formatTime(timer)}</span>

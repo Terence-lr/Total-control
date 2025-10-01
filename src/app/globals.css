@@ -97,4 +97,20 @@
       box-shadow: 0 0 0 0 hsl(var(--accent) / 0);
     }
   }
+
+  .pulse-timer {
+    animation: pulse-timer-animation 1.5s infinite;
+  }
+
+  @keyframes pulse-timer-animation {
+    0% {
+      transform: scale(1);
+    }
+    50% {
+      transform: scale(1.02);
+    }
+    100% {
+      transform: scale(1);
+    }
+  }
 }
