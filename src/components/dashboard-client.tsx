@@ -1009,5 +1009,3 @@ export function DashboardClient() {
     </>
   );
 }
-
-    
