@@ -18,7 +18,7 @@ const ScheduleEventSchema = z.object({
   duration: z.string().describe('The estimated duration of the event (e.g., "45min", "1hr").'),
 });
 
-export const AddTaskToScheduleInputSchema = z.object({
+const AddTaskToScheduleInputSchema = z.object({
   existingSchedule: z
     .array(ScheduleEventSchema)
     .describe('The current, chronologically ordered list of schedule events.'),
@@ -31,7 +31,7 @@ export const AddTaskToScheduleInputSchema = z.object({
 });
 export type AddTaskToScheduleInput = z.infer<typeof AddTaskToScheduleInputSchema>;
 
-export const AddTaskToScheduleOutputSchema = z.object({
+const AddTaskToScheduleOutputSchema = z.object({
   schedule: z
     .array(ScheduleEventSchema)
     .describe('The updated, chronologically ordered list of structured events for the day.'),

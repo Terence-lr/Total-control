@@ -13,13 +13,14 @@ import {
   DialogTitle,
   DialogDescription,
   DialogFooter,
-  DialogTrigger,
   DialogClose,
+  DialogTrigger,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ProgressCircle } from "@/components/ui/progress-circle";
 import { generateSchedule, GenerateScheduleOutput } from "@/ai/flows/generate-schedule";
+import { addTaskToSchedule, type AddTaskToScheduleInput, type AddTaskToScheduleOutput } from "@/ai/flows/add-task-to-schedule";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 
@@ -45,6 +46,7 @@ export function DashboardClient() {
   const [planText, setPlanText] = useState("");
   const [schedule, setSchedule] = useState<GenerateScheduleOutput['schedule'] | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isUpdating, setIsUpdating] = useState(false);
   const { toast } = useToast();
 
   const [currentTaskIndex, setCurrentTaskIndex] = useState(-1);
@@ -182,18 +184,62 @@ export function DashboardClient() {
     }
   };
 
+  const handleAddTask = async (newTask: string) => {
+    if (!schedule) {
+      toast({
+        title: "No active schedule",
+        description: "Generate a schedule before adding new tasks.",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (!newTask.trim()) {
+      toast({
+        title: "Task is empty",
+        description: "Please enter a task to add.",
+        variant: "destructive",
+      });
+      return;
+    }
+    setIsUpdating(true);
+    try {
+      const result = await addTaskToSchedule({
+        existingSchedule: schedule,
+        newTask: newTask,
+        currentTime: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+      });
+      setSchedule(result.schedule);
+      toast({
+        title: "Schedule Updated",
+        description: "Your new task has been added to the timeline.",
+      });
+    } catch (error) {
+      console.error("Error adding task to schedule:", error);
+      toast({
+        title: "Error",
+        description: "Failed to add task to schedule. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsUpdating(false);
+    }
+  };
 
   const QuickCaptureDialog = ({
     trigger,
     title,
     description,
     inputLabel,
+    confirmText = "Add",
+    isLoading = false,
     onConfirm,
   }: {
     trigger: React.ReactNode;
     title: string;
     description: string;
     inputLabel: string;
+    confirmText?: string;
+    isLoading?: boolean;
     onConfirm?: (value: string) => void;
   }) => {
     const [inputValue, setInputValue] = useState("");
@@ -216,12 +262,15 @@ export function DashboardClient() {
             <Label htmlFor="quick-capture-input" className="text-right">
               {inputLabel}
             </Label>
-            <Input id="quick-capture-input" className="col-span-3" value={inputValue} onChange={(e) => setInputValue(e.target.value)} />
+            <Input id="quick-capture-input" className="col-span-3" value={inputValue} onChange={(e) => setInputValue(e.target.value)} disabled={isLoading} />
           </div>
         </div>
         <DialogFooter>
           <DialogClose asChild>
-            <Button type="submit" onClick={handleConfirm}>Add</Button>
+            <Button type="submit" onClick={handleConfirm} disabled={isLoading}>
+              {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {confirmText}
+            </Button>
           </DialogClose>
         </DialogFooter>
       </DialogContent>
@@ -339,6 +388,9 @@ export function DashboardClient() {
               title="Just Add This"
               description="Quickly add a new task to your schedule."
               inputLabel="Task"
+              onConfirm={handleAddTask}
+              isLoading={isUpdating}
+              confirmText={isUpdating ? "Adding..." : "Add Task"}
             />
             <QuickCaptureDialog
               trigger={
@@ -372,7 +424,9 @@ export function DashboardClient() {
               title="Morning Dump"
               description="Lay out everything you need to do today."
               inputLabel="Dump"
-              onConfirm={(value) => handleGenerateSchedule(value)}
+              onConfirm={handleGenerateSchedule}
+              confirmText={isGenerating ? "Generating..." : "Generate"}
+              isLoading={isGenerating}
             />
           </CardContent>
         </Card>
@@ -418,3 +472,5 @@ export function DashboardClient() {
     </div>
   );
 }
+
+    
