@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Mic, Plus, Clock, Calendar as CalendarIcon, Zap, Pause, Play, Check, X, Loader2, Award, BrainCircuit, Bot, Sparkles, Book, Lightbulb, ArrowRight, NotebookText } from "lucide-react";
+import { Mic, Plus, Clock, Calendar as CalendarIcon, Zap, Pause, Play, Check, X, Loader2, Award, BrainCircuit, Bot, Sparkles, Book, Lightbulb, ArrowRight, NotebookText, FileInput } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import {
@@ -115,6 +115,7 @@ export function DashboardClient() {
   const [totalFocusedTime, setTotalFocusedTime] = useState(0); // in seconds
   const [currentTime, setCurrentTime] = useState<GetCurrentTimeOutput | null>(null);
   const [isMounted, setIsMounted] = useState(false);
+  const [tomorrowsPlan, setTomorrowsPlan] = useState<string | null>(null);
   
   const currentTask = schedule && currentTaskIndex !== -1 ? schedule[currentTaskIndex]?.task : "Ready";
   const nextTask = schedule && currentTaskIndex + 1 < schedule.length ? schedule[currentTaskIndex + 1]?.task : "End of schedule";
@@ -129,6 +130,12 @@ export function DashboardClient() {
       const savedCurrentTaskIndex = localStorage.getItem('currentTaskIndex');
       const savedCompletedTasks = localStorage.getItem('completedTasksCount');
       const savedFocusedTime = localStorage.getItem('totalFocusedTime');
+      const savedTomorrowsPlan = localStorage.getItem('tomorrowsPlan');
+
+
+      if (savedTomorrowsPlan) {
+        setTomorrowsPlan(savedTomorrowsPlan);
+      }
 
       if (savedSchedule) {
         const parsedSchedule = JSON.parse(savedSchedule);
@@ -166,10 +173,17 @@ export function DashboardClient() {
         localStorage.removeItem('completedTasksCount');
         localStorage.removeItem('totalFocusedTime');
       }
+
+      if (tomorrowsPlan) {
+        localStorage.setItem('tomorrowsPlan', tomorrowsPlan);
+      } else {
+        localStorage.removeItem('tomorrowsPlan');
+      }
+
     } catch (error) {
       console.error("Failed to save to localStorage", error);
     }
-  }, [schedule, currentTaskIndex, completedTasksCount, totalFocusedTime, isMounted]);
+  }, [schedule, currentTaskIndex, completedTasksCount, totalFocusedTime, isMounted, tomorrowsPlan]);
 
 
   useEffect(() => {
@@ -289,6 +303,7 @@ export function DashboardClient() {
     setCompletedTasksCount(0);
     setTotalFocusedTime(0);
     setSummary(null);
+    setTomorrowsPlan(null); // Clear tomorrow's plan once it's used
 
     try {
       const result = await generateSchedule({ plan });
@@ -424,14 +439,11 @@ export function DashboardClient() {
       });
       return;
     }
-    // For now, we'll just show a confirmation.
-    // In the future, this could be saved and loaded the next day.
+    setTomorrowsPlan(plan);
     toast({
         title: "Tomorrow's Plan Noted!",
         description: "Your plan for tomorrow has been saved. Ready for a productive day!",
     });
-    // Here you would typically save the plan to a database or local storage
-    console.log("Tomorrow's plan:", plan);
   }
 
   const QuickCaptureDialog = ({
@@ -661,12 +673,28 @@ export function DashboardClient() {
             </CardTitle>
           </CardHeader>
           <CardContent className="flex flex-col items-center gap-4">
-            <Input
-              placeholder="e.g., Meeting at 10am, finish report by 3pm..."
-              value={planText}
-              onChange={(e) => setPlanText(e.target.value)}
-              className="h-12"
-            />
+            <div className="w-full relative">
+                <Input
+                  placeholder="e.g., Meeting at 10am, finish report by 3pm..."
+                  value={planText}
+                  onChange={(e) => setPlanText(e.target.value)}
+                  className="h-12"
+                />
+                {tomorrowsPlan && !planText && (
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        className="absolute right-2 top-1/2 -translate-y-1/2"
+                        onClick={() => {
+                            setPlanText(tomorrowsPlan);
+                            setTomorrowsPlan(null); // Clear after loading
+                        }}
+                    >
+                        <FileInput className="mr-2 h-4 w-4" />
+                        Load Tomorrow's Plan
+                    </Button>
+                )}
+            </div>
             <Button
               size="lg"
               className="w-full"
@@ -816,3 +844,5 @@ export function DashboardClient() {
     </>
   );
 }
+
+    
