@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Mic, Plus, Clock, Calendar as CalendarIcon, Zap, Pause, Check, X } from "lucide-react";
+import { Mic, Plus, Clock, Calendar as CalendarIcon, Zap, Pause, Check, X, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -17,23 +17,42 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ProgressCircle } from "@/components/ui/progress-circle";
+import { generateSchedule, GenerateScheduleOutput } from "@/ai/flows/generate-schedule";
+import { useToast } from "@/hooks/use-toast";
 
-
-// Mock data for the timeline
-const timelineEvents = [
-  { time: "07:00 AM", task: "Morning workout", duration: "45min" },
-  { time: "08:00 AM", task: "Weekly Training Routine", duration: "1hr" },
-  { time: "09:30 AM", task: "Team Stand-up", duration: "15min" },
-  { time: "10:00 AM", task: "Work on 'Website Setup' Flow", duration: "2hr" },
-  { time: "12:00 PM", task: "Lunch Break", duration: "1hr" },
-  { time: "01:00 PM", task: "Design Homepage", duration: "1.5hr" },
-  { time: "03:00 PM", task: "Client Call", duration: "30min" },
-  { time: "04:00 PM", task: "Review Pull Requests", duration: "1hr" },
-];
 
 export function DashboardClient() {
   const [isRecording, setIsRecording] = useState(false);
   const [planText, setPlanText] = useState("");
+  const [schedule, setSchedule] = useState<GenerateScheduleOutput['schedule'] | null>(null);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const { toast } = useToast();
+
+  const handleGenerateSchedule = async () => {
+    if (!planText.trim()) {
+      toast({
+        title: "Plan is empty",
+        description: "Please enter your plan for the day.",
+        variant: "destructive",
+      });
+      return;
+    }
+    setIsGenerating(true);
+    try {
+      const result = await generateSchedule({ plan: planText });
+      setSchedule(result.schedule);
+    } catch (error) {
+      console.error("Error generating schedule:", error);
+      toast({
+        title: "Error",
+        description: "Failed to generate schedule. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
 
   const QuickCaptureDialog = ({
     trigger,
@@ -131,9 +150,11 @@ export function DashboardClient() {
             <Button
               size="lg"
               className="w-full bg-primary hover:bg-primary/90"
-              disabled={!planText}
+              disabled={!planText || isGenerating}
+              onClick={handleGenerateSchedule}
             >
-              Generate Schedule
+              {isGenerating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {isGenerating ? 'Generating...' : 'Generate Schedule'}
             </Button>
           </CardContent>
         </Card>
@@ -196,28 +217,34 @@ export function DashboardClient() {
           <CardTitle>Today's Timeline</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="relative pl-8">
-            <div className="absolute left-4 top-2 h-full w-0.5 -translate-x-1/2 bg-border"></div>
-            <ul className="space-y-10">
-              {timelineEvents.map((event, index) => (
-                <li key={index} className="relative">
-                  <div
-                    className={`absolute left-4 top-1 h-4 w-4 -translate-x-1/2 rounded-full ${
-                      index === 2
-                        ? "bg-accent ring-4 ring-accent/20"
-                        : "bg-primary"
-                    }`}
-                  ></div>
-                  <div className="ml-6">
-                    <p className="font-semibold text-primary">{event.task}</p>
-                    <p className="text-sm text-muted-foreground">
-                      {event.time} &middot; {event.duration}
-                    </p>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          </div>
+          {schedule ? (
+            <div className="relative pl-8">
+              <div className="absolute left-4 top-2 h-full w-0.5 -translate-x-1/2 bg-border"></div>
+              <ul className="space-y-10">
+                {schedule.map((event, index) => (
+                  <li key={index} className="relative">
+                    <div
+                      className={`absolute left-4 top-1 h-4 w-4 -translate-x-1/2 rounded-full bg-primary`}
+                    ></div>
+                    <div className="ml-6">
+                      <p className="font-semibold text-primary">{event.task}</p>
+                      <p className="text-sm text-muted-foreground">
+                        {event.time} &middot; {event.duration}
+                      </p>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : (
+            <div className="flex flex-col items-center justify-center text-center text-muted-foreground h-full p-8">
+              <CalendarIcon className="h-12 w-12 mb-4" />
+              <p className="font-medium">Your schedule is empty.</p>
+              <p className="text-sm">
+                Generate a schedule from your plan to see your timeline here.
+              </p>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>
