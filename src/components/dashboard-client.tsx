@@ -41,6 +41,8 @@ const ScheduleEventSchema = z.object({
   task: z.string().describe('A short description of the task or event.'),
   duration: z.string().describe('The estimated duration of the event (e.g., "45min", "1hr").'),
 });
+type ScheduleEvent = z.infer<typeof ScheduleEventSchema>;
+
 
 const AddTaskToScheduleInputSchema = z.object({
   existingSchedule: z
@@ -100,7 +102,7 @@ const timeToMinutes = (timeStr: string): number => {
 
 export function DashboardClient() {
   const [planText, setPlanText] = useState("");
-  const [schedule, setSchedule] = useState<GenerateScheduleOutput['schedule'] | null>(null);
+  const [schedule, setSchedule] = useState<ScheduleEvent[] | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
   const [isAdjusting, setIsAdjusting] = useState(false);
@@ -330,8 +332,16 @@ export function DashboardClient() {
 
     try {
       const result = await generateSchedule({ plan });
-      setSchedule(result.schedule);
-      if (result.schedule && result.schedule.length > 0) {
+
+      if (result.needs_clarification && result.clarifying_questions.length > 0) {
+        // TODO: Handle clarification questions in a chat-like UI
+        toast({
+          title: "Need more information",
+          description: result.clarifying_questions[0],
+        });
+        setSchedule(null);
+      } else if (result.schedule && result.schedule.length > 0) {
+        setSchedule(result.schedule);
         startTask(0);
       } else {
         toast({
