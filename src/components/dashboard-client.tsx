@@ -20,9 +20,31 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ProgressCircle } from "@/components/ui/progress-circle";
 import { generateSchedule, GenerateScheduleOutput } from "@/ai/flows/generate-schedule";
-import { addTaskToSchedule, type AddTaskToScheduleInput, type AddTaskToScheduleOutput } from "@/ai/flows/add-task-to-schedule";
+import { addTaskToSchedule } from "@/ai/flows/add-task-to-schedule";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+import { z } from "zod";
+
+// Schema for a single event, consistent with generate-schedule flow
+const ScheduleEventSchema = z.object({
+  time: z.string().describe('The start time of the event (e.g., "09:00 AM").'),
+  task: z.string().describe('A short description of the task or event.'),
+  duration: z.string().describe('The estimated duration of the event (e.g., "45min", "1hr").'),
+});
+
+const AddTaskToScheduleInputSchema = z.object({
+  existingSchedule: z
+    .array(ScheduleEventSchema)
+    .describe('The current, chronologically ordered list of schedule events.'),
+  newTask: z
+    .string()
+    .describe(
+      'The new task to add. This can be a simple description like "Call mom" or include timing hints like "add a 15min break after my next meeting".'
+    ),
+  currentTime: z.string().optional().describe('The current time, to provide context for where to insert the new task (e.g., "11:30 AM").')
+});
+type AddTaskToScheduleInput = z.infer<typeof AddTaskToScheduleInputSchema>;
+
 
 const parseDuration = (durationStr: string): number => {
   const minutesMatch = durationStr.match(/(\d+)\s*min/);
@@ -289,7 +311,7 @@ export function DashboardClient() {
             <div className="flex flex-col items-center justify-center space-y-4">
               <div className={cn("relative h-48 w-48", timer < 60 && timer > 0 && isTimerActive && "pulse-timer")}>
                 <ProgressCircle value={timer} max={initialTaskDuration} />
-                <div className="absolute inset-0 flex flex-col items-center justify-center p-14">
+                <div className="absolute inset-0 flex flex-col items-center justify-center p-4">
                   <span className="text-4xl font-bold text-primary">{formatTime(timer)}</span>
                   <span className="text-muted-foreground text-center truncate w-full block">{currentTask}</span>
                 </div>
@@ -438,13 +460,13 @@ export function DashboardClient() {
         </CardHeader>
         <CardContent>
           {schedule && schedule.length > 0 ? (
-            <div className="relative pl-8">
-              <div className="absolute left-4 top-2 h-full w-0.5 -translate-x-1/2 bg-border"></div>
+            <div className="relative pl-6">
+              <div className="absolute left-0 top-1 h-full w-0.5 -translate-x-1/2 bg-border"></div>
               <ul className="space-y-10">
                 {schedule.map((event, index) => (
                   <li key={index} className="relative">
                     <div
-                      className={`absolute left-4 top-1 h-4 w-4 -translate-x-1/2 rounded-full ${index === currentTaskIndex ? 'bg-accent pulse-red' : (index < currentTaskIndex ? 'bg-primary' : 'bg-border')}`}
+                      className={`absolute -left-2 top-1 h-4 w-4 -translate-x-1/2 rounded-full ${index === currentTaskIndex ? 'bg-accent pulse-red' : (index < currentTaskIndex ? 'bg-primary' : 'bg-border')}`}
                     >
                      {index < currentTaskIndex && <Check className="h-4 w-4 text-primary-foreground" />}
                     </div>
@@ -472,5 +494,7 @@ export function DashboardClient() {
     </div>
   );
 }
+
+    
 
     
