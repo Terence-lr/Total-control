@@ -22,6 +22,7 @@ import { generateSchedule, GenerateScheduleOutput } from "@/ai/flows/generate-sc
 import { addTaskToSchedule } from "@/ai/flows/add-task-to-schedule";
 import { adjustScheduleForDelay } from "@/ai/flows/adjust-schedule-for-delay";
 import { summarizeDay, SummarizeDayOutput } from "@/ai/flows/summarize-day";
+import { getCurrentTime, GetCurrentTimeOutput } from "@/ai/flows/get-current-time";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { z } from "zod";
@@ -82,6 +83,19 @@ const parseDuration = (durationStr: string): number => {
   return 25 * 60; // Default to 25 minutes if parsing fails
 };
 
+const timeToMinutes = (timeStr: string): number => {
+  const [time, period] = timeStr.split(' ');
+  let [hours, minutes] = time.split(':').map(Number);
+  if (period && period.toLowerCase() === 'pm' && hours !== 12) {
+    hours += 12;
+  }
+  if (period && period.toLowerCase() === 'am' && hours === 12) {
+    hours = 0;
+  }
+  return hours * 60 + minutes;
+};
+
+
 export function DashboardClient() {
   const [isRecording, setIsRecording] = useState(false);
   const [planText, setPlanText] = useState("");
@@ -100,6 +114,7 @@ export function DashboardClient() {
   const [isTimerActive, setIsTimerActive] = useState(false);
   const [completedTasksCount, setCompletedTasksCount] = useState(0);
   const [totalFocusedTime, setTotalFocusedTime] = useState(0); // in seconds
+  const [currentTime, setCurrentTime] = useState<GetCurrentTimeOutput | null>(null);
   
   const currentTask = schedule && currentTaskIndex !== -1 ? schedule[currentTaskIndex]?.task : "Ready";
   const nextTask = schedule && currentTaskIndex + 1 < schedule.length ? schedule[currentTaskIndex + 1]?.task : "End of schedule";
@@ -119,6 +134,21 @@ export function DashboardClient() {
 
     return () => clearInterval(interval);
   }, [isTimerActive, timer]);
+
+  useEffect(() => {
+    const fetchTime = async () => {
+      try {
+        const time = await getCurrentTime();
+        setCurrentTime(time);
+      } catch (error) {
+        console.error("Error fetching current time:", error);
+      }
+    };
+    
+    fetchTime();
+    const timeInterval = setInterval(fetchTime, 60000); // Update every minute
+    return () => clearInterval(timeInterval);
+  }, []);
 
   const toggleTimer = () => {
     if (currentTaskIndex === -1 && schedule && schedule.length > 0) {
@@ -427,6 +457,34 @@ export function DashboardClient() {
     </AccordionItem>
   );
 
+  const calculateNowPosition = () => {
+    if (!schedule || schedule.length === 0 || !currentTime) {
+      return null;
+    }
+  
+    const nowInMinutes = currentTime.hours * 60 + currentTime.minutes;
+  
+    const firstEventMinutes = timeToMinutes(schedule[0].time);
+    const lastEvent = schedule[schedule.length - 1];
+    const lastEventMinutes = timeToMinutes(lastEvent.time) + (parseDuration(lastEvent.duration) / 60);
+  
+    if (nowInMinutes < firstEventMinutes || nowInMinutes > lastEventMinutes) {
+      return null;
+    }
+  
+    // Estimate total height: 10 (space-y) + (4+4) (padding) for each item approx
+    // And each li is roughly 60px high.
+    const totalPixels = schedule.length * (60 + 10); 
+    const totalMinutes = lastEventMinutes - firstEventMinutes;
+  
+    const minutesFromStart = nowInMinutes - firstEventMinutes;
+    const percentageThroughDay = minutesFromStart / totalMinutes;
+  
+    return percentageThroughDay * totalPixels;
+  };
+
+  const nowPosition = calculateNowPosition();
+
 
   return (
     <>
@@ -656,6 +714,16 @@ export function DashboardClient() {
           {schedule && schedule.length > 0 ? (
             <div className="relative pl-6">
               <div className="absolute left-0 top-1 h-full w-0.5 -translate-x-1/2 bg-border"></div>
+              {nowPosition !== null && (
+                <div 
+                  className="absolute left-0 w-full"
+                  style={{ top: `${nowPosition}px`}}
+                >
+                    <div className="relative h-px bg-accent">
+                        <div className="absolute -left-5 -top-2 text-xs font-bold text-accent">Now</div>
+                    </div>
+                </div>
+              )}
               <ul className="space-y-10">
                 {schedule.map((event, index) => (
                   <li key={index} className="relative">
