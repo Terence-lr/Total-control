@@ -14,6 +14,7 @@ import {
   DialogDescription,
   DialogFooter,
   DialogTrigger,
+  DialogClose,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -140,8 +141,8 @@ export function DashboardClient() {
     return result.trim();
   }
 
-  const handleGenerateSchedule = async () => {
-    if (!planText.trim()) {
+  const handleGenerateSchedule = async (plan: string) => {
+    if (!plan.trim()) {
       toast({
         title: "Plan is empty",
         description: "Please enter your plan for the day.",
@@ -157,7 +158,7 @@ export function DashboardClient() {
     setTotalFocusedTime(0);
 
     try {
-      const result = await generateSchedule({ plan: planText });
+      const result = await generateSchedule({ plan });
       setSchedule(result.schedule);
       if (result.schedule && result.schedule.length > 0) {
         startTask(0);
@@ -186,12 +187,22 @@ export function DashboardClient() {
     title,
     description,
     inputLabel,
+    onConfirm,
   }: {
     trigger: React.ReactNode;
     title: string;
     description: string;
     inputLabel: string;
-  }) => (
+    onConfirm?: (value: string) => void;
+  }) => {
+    const [inputValue, setInputValue] = useState("");
+
+    const handleConfirm = () => {
+      onConfirm?.(inputValue);
+      setInputValue("");
+    }
+
+    return (
     <Dialog>
       <DialogTrigger asChild>{trigger}</DialogTrigger>
       <DialogContent className="sm:max-w-[425px]">
@@ -204,15 +215,18 @@ export function DashboardClient() {
             <Label htmlFor="quick-capture-input" className="text-right">
               {inputLabel}
             </Label>
-            <Input id="quick-capture-input" className="col-span-3" />
+            <Input id="quick-capture-input" className="col-span-3" value={inputValue} onChange={(e) => setInputValue(e.target.value)} />
           </div>
         </div>
         <DialogFooter>
-          <Button type="submit">Add</Button>
+          <DialogClose asChild>
+            <Button type="submit" onClick={handleConfirm}>Add</Button>
+          </DialogClose>
         </DialogFooter>
       </DialogContent>
     </Dialog>
-  );
+    );
+  };
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -301,7 +315,7 @@ export function DashboardClient() {
               size="lg"
               className="w-full bg-primary hover:bg-primary/90"
               disabled={!planText || isGenerating}
-              onClick={handleGenerateSchedule}
+              onClick={() => handleGenerateSchedule(planText)}
             >
               {isGenerating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               {isGenerating ? 'Generating...' : 'Generate Schedule'}
@@ -357,6 +371,7 @@ export function DashboardClient() {
               title="Morning Dump"
               description="Lay out everything you need to do today."
               inputLabel="Dump"
+              onConfirm={(value) => handleGenerateSchedule(value)}
             />
           </CardContent>
         </Card>
