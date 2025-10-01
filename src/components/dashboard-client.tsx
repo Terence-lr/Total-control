@@ -67,6 +67,7 @@ type AdjustScheduleForDelayInput = z.infer<typeof AdjustScheduleForDelayInputSch
 
 
 const parseDuration = (durationStr: string): number => {
+  if (!durationStr) return 25 * 60;
   const minutesMatch = durationStr.match(/(\d+)\s*min/);
   if (minutesMatch) {
     return parseInt(minutesMatch[1], 10) * 60;
@@ -97,7 +98,6 @@ const timeToMinutes = (timeStr: string): number => {
 
 
 export function DashboardClient() {
-  const [isRecording, setIsRecording] = useState(false);
   const [planText, setPlanText] = useState("");
   const [schedule, setSchedule] = useState<GenerateScheduleOutput['schedule'] | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -115,11 +115,63 @@ export function DashboardClient() {
   const [completedTasksCount, setCompletedTasksCount] = useState(0);
   const [totalFocusedTime, setTotalFocusedTime] = useState(0); // in seconds
   const [currentTime, setCurrentTime] = useState<GetCurrentTimeOutput | null>(null);
+  const [isMounted, setIsMounted] = useState(false);
   
   const currentTask = schedule && currentTaskIndex !== -1 ? schedule[currentTaskIndex]?.task : "Ready";
   const nextTask = schedule && currentTaskIndex + 1 < schedule.length ? schedule[currentTaskIndex + 1]?.task : "End of schedule";
 
   const scheduleIsComplete = schedule && schedule.length > 0 && currentTaskIndex === -1 && completedTasksCount === schedule.length;
+
+  // Load from localStorage on mount
+  useEffect(() => {
+    setIsMounted(true);
+    try {
+      const savedSchedule = localStorage.getItem('schedule');
+      const savedCurrentTaskIndex = localStorage.getItem('currentTaskIndex');
+      const savedCompletedTasks = localStorage.getItem('completedTasksCount');
+      const savedFocusedTime = localStorage.getItem('totalFocusedTime');
+
+      if (savedSchedule) {
+        const parsedSchedule = JSON.parse(savedSchedule);
+        setSchedule(parsedSchedule);
+        
+        const taskIndex = savedCurrentTaskIndex ? parseInt(savedCurrentTaskIndex, 10) : -1;
+        
+        if(taskIndex !== -1 && taskIndex < parsedSchedule.length) {
+            const taskDuration = parseDuration(parsedSchedule[taskIndex].duration);
+            setInitialTaskDuration(taskDuration);
+            setTimer(taskDuration);
+        }
+
+        setCurrentTaskIndex(taskIndex);
+        setCompletedTasksCount(savedCompletedTasks ? parseInt(savedCompletedTasks, 10) : 0);
+        setTotalFocusedTime(savedFocusedTime ? parseInt(savedFocusedTime, 10) : 0);
+      }
+    } catch (error) {
+      console.error("Failed to load from localStorage", error);
+    }
+  }, []);
+
+  // Save to localStorage whenever state changes
+  useEffect(() => {
+    if (!isMounted) return; // Don't save on initial server render
+    try {
+      if (schedule) {
+        localStorage.setItem('schedule', JSON.stringify(schedule));
+        localStorage.setItem('currentTaskIndex', String(currentTaskIndex));
+        localStorage.setItem('completedTasksCount', String(completedTasksCount));
+        localStorage.setItem('totalFocusedTime', String(totalFocusedTime));
+      } else {
+        localStorage.removeItem('schedule');
+        localStorage.removeItem('currentTaskIndex');
+        localStorage.removeItem('completedTasksCount');
+        localStorage.removeItem('totalFocusedTime');
+      }
+    } catch (error) {
+      console.error("Failed to save to localStorage", error);
+    }
+  }, [schedule, currentTaskIndex, completedTasksCount, totalFocusedTime, isMounted]);
+
 
   useEffect(() => {
     let interval: NodeJS.Timeout | undefined;
@@ -485,6 +537,14 @@ export function DashboardClient() {
 
   const nowPosition = calculateNowPosition();
 
+  if (!isMounted) {
+      return (
+        <div className="flex items-center justify-center h-full">
+            <Loader2 className="h-8 w-8 animate-spin text-accent" />
+        </div>
+      );
+  }
+
 
   return (
     <>
@@ -757,3 +817,5 @@ export function DashboardClient() {
     </>
   );
 }
+
+    
