@@ -26,6 +26,12 @@ import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { z } from "zod";
 import { DialogTrigger } from "@radix-ui/react-dialog";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion"
 
 // Schema for a single event, consistent with generate-schedule flow
 const ScheduleEventSchema = z.object({
@@ -401,27 +407,31 @@ export function DashboardClient() {
   };
   
   const SummarySection = ({ title, items, icon: Icon }: { title: string; items: string[]; icon: React.ElementType }) => (
-    <div className="space-y-2">
-      <h3 className="font-semibold flex items-center gap-2 text-md">
-        <Icon className="h-5 w-5 text-accent" />
-        {title}
-      </h3>
-      <ul className="space-y-2 pl-4 text-muted-foreground">
-        {items.map((item, index) => (
-          <li key={index} className="flex items-start gap-3">
-            <ArrowRight className="h-4 w-4 mt-1 shrink-0" />
-            <span>{item}</span>
-          </li>
-        ))}
-      </ul>
-    </div>
+    <AccordionItem value={title}>
+      <AccordionTrigger className="text-md font-semibold">
+        <div className="flex items-center gap-2">
+          <Icon className="h-5 w-5 text-accent" />
+          {title}
+        </div>
+      </AccordionTrigger>
+      <AccordionContent>
+        <ul className="space-y-2 pl-4 text-muted-foreground">
+          {items.map((item, index) => (
+            <li key={index} className="flex items-start gap-3">
+              <ArrowRight className="h-4 w-4 mt-1 shrink-0" />
+              <span>{item}</span>
+            </li>
+          ))}
+        </ul>
+      </AccordionContent>
+    </AccordionItem>
   );
 
 
   return (
     <>
     <Dialog open={showSummaryDialog} onOpenChange={setShowSummaryDialog}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2"><Sparkles className="text-accent"/> Your Daily Summary</DialogTitle>
           <DialogDescription>
@@ -434,7 +444,7 @@ export function DashboardClient() {
                 <Loader2 className="h-8 w-8 animate-spin text-accent" />
              </div>
           ) : summary ? (
-            <div className="space-y-6">
+            <Accordion type="multiple" defaultValue={['Key Accomplishments', 'Suggestions for Tomorrow']} className="w-full">
                 {summary.accomplishments && summary.accomplishments.length > 0 && (
                     <SummarySection title="Key Accomplishments" items={summary.accomplishments} icon={Award} />
                 )}
@@ -444,9 +454,9 @@ export function DashboardClient() {
                 {summary.suggestions && summary.suggestions.length > 0 && (
                     <SummarySection title="Suggestions for Tomorrow" items={summary.suggestions} icon={NotebookText} />
                 )}
-            </div>
+            </Accordion>
           ) : (
-             <div className="flex items-center justify-center text-muted-foreground">
+             <div className="flex items-center justify-center text-muted-foreground h-40">
                 No summary available.
              </div>
           )}
@@ -679,5 +689,3 @@ export function DashboardClient() {
     </>
   );
 }
-
-    
