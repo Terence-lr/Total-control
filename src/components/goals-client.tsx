@@ -61,10 +61,12 @@ export function GoalsClient() {
       </CardHeader>
       <CardContent>
         {items && items.length > 0 ? (
-          <ul className="space-y-2">
+          <ul className="space-y-3">
             {items.map((item, index) => (
-              <li key={index} className="flex items-start gap-2">
-                <div className="mt-1 h-2 w-2 rounded-full bg-primary" />
+              <li key={index} className="flex items-start gap-3">
+                <div className="mt-1">
+                    <Icon className="h-4 w-4 text-primary" />
+                </div>
                 <span>{item}</span>
               </li>
             ))}
