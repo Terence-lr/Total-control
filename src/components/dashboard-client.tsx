@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Mic, Plus, Clock, Calendar as CalendarIcon, Zap } from "lucide-react";
+import { Mic, Plus, Clock, Calendar as CalendarIcon, Zap, Pause, Check, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -16,6 +16,8 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { ProgressCircle } from "@/components/ui/progress-circle";
+
 
 // Mock data for the timeline
 const timelineEvents = [
@@ -69,6 +71,38 @@ export function DashboardClient() {
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
       <div className="lg:col-span-2 space-y-6">
+        <Card className="shadow-lg">
+          <CardHeader>
+            <CardTitle>Now Playing</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-col items-center justify-center space-y-4">
+              <div className="relative h-48 w-48">
+                <ProgressCircle value={75} max={100} />
+                <div className="absolute inset-0 flex flex-col items-center justify-center">
+                  <span className="text-4xl font-bold text-primary">15:00</span>
+                  <span className="text-muted-foreground">Team Stand-up</span>
+                </div>
+              </div>
+              <div className="flex w-full items-center justify-center space-x-4">
+                <Button variant="outline" size="lg">
+                  <Pause className="mr-2 h-5 w-5" /> Pause
+                </Button>
+                <Button size="lg">
+                  <Check className="mr-2 h-5 w-5" /> Complete
+                </Button>
+                <Button variant="ghost" size="lg">
+                  <X className="mr-2 h-5 w-5" /> Skip
+                </Button>
+              </div>
+              <div className="text-center">
+                <span className="text-muted-foreground">Up next: </span>
+                <span className="font-medium text-primary">Work on 'Website Setup' Flow</span>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
         <Card className="shadow-lg">
           <CardHeader>
             <CardTitle className="text-2xl font-bold">
