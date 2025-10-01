@@ -115,7 +115,7 @@ export function DashboardClient() {
   const [completedTasksCount, setCompletedTasksCount] = useState(0);
   const [totalFocusedTime, setTotalFocusedTime] = useState(0); // in seconds
   const [currentTime, setCurrentTime] = useState<GetCurrentTimeOutput | null>(null);
-  const [isMounted, setIsMounted]_useState(false);
+  const [isMounted, setIsMounted] = useState(false);
   const [tomorrowsPlan, setTomorrowsPlan] = useState<string | null>(null);
   
   const currentTask = schedule && currentTaskIndex !== -1 ? schedule[currentTaskIndex]?.task : "Ready";
@@ -853,5 +853,3 @@ export function DashboardClient() {
     </>
   );
 }
-
-    
