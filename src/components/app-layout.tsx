@@ -21,6 +21,7 @@ import {
   Repeat,
   Target,
   Bot,
+  Settings,
 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -32,6 +33,7 @@ const navItems = [
   { href: "/flows", icon: Workflow, label: "Flows" },
   { href: "/routines", icon: Repeat, label: "Routines" },
   { href: "/goals", icon: Target, label: "Goals" },
+  { href: "/settings", icon: Settings, label: "Settings" },
 ];
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
