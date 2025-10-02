@@ -617,10 +617,9 @@ export function DashboardClient() {
     };
 
     const isLoading = isGenerating || isUpdating;
-    const showLiveTranscript = isRecording && !liveTasks.length && !clarificationState;
-    const showTaskCards = isRecording && liveTasks.length > 0 && !clarificationState;
     const showClarification = clarificationState && clarificationState.questions.length > 0 && !isLoading;
-    
+    const showInfoDisplay = isRecording || liveTasks.length > 0 || showClarification || isLoading;
+
     return (
         <Dialog open={showVoiceDialog} onOpenChange={(open) => {
             if (!open) { handleCancel(); }
@@ -630,58 +629,54 @@ export function DashboardClient() {
                 <div className="flex-1 flex flex-col items-center justify-center text-center p-8 relative">
                     
                     <div className="absolute top-10 text-center w-full max-w-2xl px-4 min-h-[300px]">
-                      {showLiveTranscript && (
-                        <div className="fade-in">
-                           <p className="text-2xl text-muted-foreground mb-4">{transcript.interim || "Listening..."}</p>
-                           <p className="text-4xl lg:text-5xl font-bold text-foreground">{transcript.final}</p>
-                        </div>
-                      )}
-
-                      {showTaskCards && (
-                        <Card className="text-left bg-background/80 backdrop-blur-sm max-h-[50vh] overflow-y-auto fade-in">
-                          <CardHeader>
-                            <CardTitle className="flex items-center gap-2"><Mic/> Tasks I'm hearing...</CardTitle>
-                          </CardHeader>
-                          <CardContent className="space-y-4">
-                            {liveTasks.map((task, index) => (
-                              <div key={index} className="p-3 rounded-lg border bg-background/50">
-                                <p className="font-semibold text-lg">{task.name}</p>
-                                <div className="flex items-center gap-4 text-sm text-muted-foreground mt-1">
-                                  {task.time && <span className="flex items-center gap-1"><CalendarIcon className="w-4 h-4"/> {task.time}</span>}
-                                  {task.duration && <span className="flex items-center gap-1"><Hourglass className="w-4 h-4"/> {task.duration}</span>}
-                                  {task.status === 'needs_info' && !task.time && !task.duration && (
-                                    <span className="text-xs italic">More details needed...</span>
-                                  )}
-                                </div>
-                              </div>
-                            ))}
-                          </CardContent>
-                        </Card>
-                      )}
-
-                      {showClarification && (
-                          <div className="w-full max-w-lg mx-auto text-left fade-in">
-                              <Label className="text-2xl font-semibold mb-4 block text-center">{clarificationState.questions[0]}</Label>
-                              <div className="flex gap-2">
-                                  <Textarea
-                                      value={planText}
-                                      onChange={(e) => setPlanText(e.target.value)}
-                                      onKeyDown={handleTextInputKeyDown}
-                                      placeholder="Type your answer... (Cmd+Enter to submit)"
-                                      disabled={isLoading}
-                                      className="text-lg"
-                                      rows={2}
-                                  />
-                                  <Button size="lg" onClick={() => handleClarificationResponse(planText)} disabled={!planText.trim() || isLoading}>
-                                    {isLoading ? <Loader2 className="animate-spin" /> : <ArrowRight />}
-                                  </Button>
-                              </div>
-                          </div>
-                      )}
-
-                      {isLoading && (
+                      {showInfoDisplay && (
                           <div className="fade-in">
-                            <p className="text-2xl font-medium text-muted-foreground">Thinking...</p>
+                              {isLoading ? (
+                                  <p className="text-2xl font-medium text-muted-foreground">Thinking...</p>
+                              ) : showClarification ? (
+                                  <div className="w-full max-w-lg mx-auto text-left fade-in">
+                                      <Label className="text-2xl font-semibold mb-4 block text-center">{clarificationState.questions[0]}</Label>
+                                      <div className="flex gap-2">
+                                          <Textarea
+                                              value={planText}
+                                              onChange={(e) => setPlanText(e.target.value)}
+                                              onKeyDown={handleTextInputKeyDown}
+                                              placeholder="Type your answer... (Cmd+Enter to submit)"
+                                              disabled={isLoading}
+                                              className="text-lg"
+                                              rows={2}
+                                          />
+                                          <Button size="lg" onClick={() => handleClarificationResponse(planText)} disabled={!planText.trim() || isLoading}>
+                                            {isLoading ? <Loader2 className="animate-spin" /> : <ArrowRight />}
+                                          </Button>
+                                      </div>
+                                  </div>
+                              ) : liveTasks.length > 0 ? (
+                                  <Card className="text-left bg-background/80 backdrop-blur-sm max-h-[50vh] overflow-y-auto fade-in">
+                                      <CardHeader>
+                                        <CardTitle className="flex items-center gap-2"><Mic/> Tasks I'm hearing...</CardTitle>
+                                      </CardHeader>
+                                      <CardContent className="space-y-4">
+                                        {liveTasks.map((task, index) => (
+                                          <div key={index} className="p-3 rounded-lg border bg-background/50">
+                                            <p className="font-semibold text-lg">{task.name}</p>
+                                            <div className="flex items-center gap-4 text-sm text-muted-foreground mt-1">
+                                              {task.time && <span className="flex items-center gap-1"><CalendarIcon className="w-4 h-4"/> {task.time}</span>}
+                                              {task.duration && <span className="flex items-center gap-1"><Hourglass className="w-4 h-4"/> {task.duration}</span>}
+                                              {task.status === 'needs_info' && !task.time && !task.duration && (
+                                                <span className="text-xs italic">More details needed...</span>
+                                              )}
+                                            </div>
+                                          </div>
+                                        ))}
+                                      </CardContent>
+                                    </Card>
+                              ) : (
+                                  <>
+                                      <p className="text-2xl text-muted-foreground mb-4">{transcript.interim || "Listening..."}</p>
+                                      <p className="text-4xl lg:text-5xl font-bold text-foreground">{transcript.final}</p>
+                                  </>
+                              )}
                           </div>
                       )}
                     </div>
