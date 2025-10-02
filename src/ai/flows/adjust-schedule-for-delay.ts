@@ -1,80 +1,29 @@
-'use server';
+export async function adjustScheduleForDelay(params: {
+  currentSchedule: any[];
+  delayMinutes: number;
+  fromTaskIndex: number;
+}) {
+  const { currentSchedule, delayMinutes, fromTaskIndex } = params;
 
-/**
- * @fileOverview A Genkit flow for adjusting an existing schedule due to a delay.
- *
- * - adjustScheduleForDelay - The function that triggers the flow to modify the schedule.
- * - AdjustScheduleForDelayInput - The input type for the adjustScheduleForDelay function.
- * - AdjustScheduleForDelayOutput - The return type for the adjustScheduleForDelay function.
- */
+  // Shift all tasks after the specified index by delay amount
+  const updatedSchedule = currentSchedule.map((task, index) => {
+    if (index >= fromTaskIndex && task.time) {
+      const [hours, minutes] = task.time.split(':').map(Number);
+      const totalMinutes = hours * 60 + minutes + delayMinutes;
+      const newHours = Math.floor(totalMinutes / 60) % 24;
+      const newMinutes = totalMinutes % 60;
+      
+      return {
+        ...task,
+        time: `${newHours.toString().padStart(2, '0')}:${newMinutes.toString().padStart(2, '0')}`,
+      };
+    }
+    return task;
+  });
 
-import {ai} from '@/ai/genkit';
-import {z} from 'genkit';
-
-// Schema for a single event, consistent with other schedule flows
-const ScheduleEventSchema = z.object({
-  time: z.string().describe('The start time of the event (e.g., "09:00 AM").'),
-  task: z.string().describe('A short description of the task or event.'),
-  duration: z.string().describe('The estimated duration of the event (e.g., "45min", "1hr").'),
-});
-
-const AdjustScheduleForDelayInputSchema = z.object({
-  existingSchedule: z
-    .array(ScheduleEventSchema)
-    .describe('The current, chronologically ordered list of schedule events.'),
-  delayDuration: z
-    .string()
-    .describe('The duration of the delay (e.g., "15 minutes", "a half hour").'),
-  currentTime: z.string().optional().describe('The current time, to provide context for which tasks to shift (e.g., "11:30 AM").')
-});
-export type AdjustScheduleForDelayInput = z.infer<typeof AdjustScheduleForDelayInputSchema>;
-
-const AdjustScheduleForDelayOutputSchema = z.object({
-  schedule: z
-    .array(ScheduleEventSchema)
-    .describe('The updated, chronologically ordered list of structured events for the day.'),
-});
-export type AdjustScheduleForDelayOutput = z.infer<typeof AdjustScheduleForDelayOutputSchema>;
-
-
-export async function adjustScheduleForDelay(
-  input: AdjustScheduleForDelayInput
-): Promise<AdjustScheduleForDelayOutput> {
-  return adjustScheduleForDelayFlow(input);
+  return {
+    success: true,
+    schedule: updatedSchedule,
+    message: `Shifted schedule by ${delayMinutes} minutes`,
+  };
 }
-
-const adjustScheduleForDelayPrompt = ai.definePrompt({
-  name: 'adjustScheduleForDelayPrompt',
-  input: {schema: AdjustScheduleForDelayInputSchema},
-  output: {schema: AdjustScheduleForDelayOutputSchema},
-  prompt: `You are an expert at dynamically updating schedules. Your task is to take an existing schedule and a delay duration, and shift the schedule accordingly.
-
-The current time is {{currentTime}}.
-
-The existing schedule is:
-\`\`\`json
-{{{json existingSchedule}}}
-\`\`\`
-
-The user is running late by: "{{delayDuration}}"
-
-Follow these rules:
-1.  **Identify Future Tasks:** Based on the \`currentTime\`, identify all tasks in the schedule that have not yet started.
-2.  **Do Not Change Past:** Do not change the start times or durations of tasks that have already started or are completed.
-3.  **Calculate New Times:** For each identified future task, shift its start time forward by the specified \`delayDuration\`.
-4.  **Maintain Duration:** Do not alter the duration of any task.
-5.  **Return the Full Schedule:** Output the complete, updated schedule in the correct JSON format, including both the unchanged past tasks and the shifted future tasks. Ensure the final schedule remains chronologically ordered.
-`,
-});
-
-const adjustScheduleForDelayFlow = ai.defineFlow(
-  {
-    name: 'adjustScheduleForDelayFlow',
-    inputSchema: AdjustScheduleForDelayInputSchema,
-    outputSchema: AdjustScheduleForDelayOutputSchema,
-  },
-  async input => {
-    const {output} = await adjustScheduleForDelayPrompt(input);
-    return output!;
-  }
-);

@@ -1,8 +1,8 @@
 
 'use client';
 
-import { AppLayout } from "@/components/app-layout";
-import { FocusClient } from "@/components/focus-client";
+import AppLayout from "@/components/app-layout";
+import FocusClient from "@/components/focus-client";
 import { Suspense } from "react";
 
 function FocusPageContent() {

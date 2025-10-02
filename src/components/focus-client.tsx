@@ -1,221 +1,207 @@
+'use client';
 
-"use client";
+import { useState, useEffect } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 
-import { useState, useEffect, useCallback } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
-import { Pause, Play, Check, X, Loader2 } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { ProgressCircle } from "@/components/ui/progress-circle";
-import { useToast } from "@/hooks/use-toast";
-import { cn } from "@/lib/utils";
-import { z } from "zod";
+interface Task {
+  id: string;
+  name: string;
+  duration_minutes: number;
+  completed: boolean;
+}
 
-// Schema for a single event, consistent with other parts of the app
-const ScheduleEventSchema = z.object({
-  time: z.string(),
-  task: z.string(),
-  duration: z.string(),
-});
-type ScheduleEvent = z.infer<typeof ScheduleEventSchema>;
-
-const parseDuration = (durationStr: string): number => {
-  if (!durationStr) return 25 * 60;
-  const minutesMatch = durationStr.match(/(\d+)\s*min/);
-  if (minutesMatch) return parseInt(minutesMatch[1], 10) * 60;
-  const hourMatch = durationStr.match(/(\d+)\s*hr/);
-  if (hourMatch) return parseInt(hourMatch[1], 10) * 3600;
-  const numberMatch = durationStr.match(/^(\d+)$/);
-  if (numberMatch) return parseInt(numberMatch[1], 10) * 60;
-  return 25 * 60; // Default
-};
-
-export function FocusClient() {
+export default function FocusClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { toast } = useToast();
+  const taskIndex = parseInt(searchParams.get('task') || '0');
 
-  const [schedule, setSchedule] = useState<ScheduleEvent[] | null>(null);
-  const [currentTaskIndex, setCurrentTaskIndex] = useState(-1);
-  const [initialTaskDuration, setInitialTaskDuration] = useState(25 * 60);
-  const [timer, setTimer] = useState(25 * 60);
-  const [isTimerActive, setIsTimerActive] = useState(false);
-  const [isMounted, setIsMounted] = useState(false);
-  const [completedTasksCount, setCompletedTasksCount] = useState(0);
-  const [totalFocusedTime, setTotalFocusedTime] = useState(0);
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [currentTask, setCurrentTask] = useState<Task | null>(null);
+  const [timeRemaining, setTimeRemaining] = useState(0);
+  const [isRunning, setIsRunning] = useState(false);
 
-  const isTimerStarted = currentTaskIndex !== -1;
-  const currentTask = schedule && currentTaskIndex !== -1 ? schedule[currentTaskIndex] : null;
-
-  // Load schedule and state from localStorage
   useEffect(() => {
-    setIsMounted(true);
-    try {
-      const savedSchedule = localStorage.getItem('schedule');
-      const savedCompletedTasks = localStorage.getItem('completedTasksCount');
-      const savedFocusedTime = localStorage.getItem('totalFocusedTime');
-
-      if (savedSchedule) {
-        const parsedSchedule = JSON.parse(savedSchedule) as ScheduleEvent[];
-        setSchedule(parsedSchedule);
-        setCompletedTasksCount(savedCompletedTasks ? parseInt(savedCompletedTasks, 10) : 0);
-        setTotalFocusedTime(savedFocusedTime ? parseInt(savedFocusedTime, 10) : 0);
-      } else {
-        // If no schedule, redirect to dashboard
-        router.push('/dashboard');
+    // Load schedule from localStorage
+    const scheduleData = localStorage.getItem('dailySchedule');
+    if (scheduleData) {
+      const parsedTasks = JSON.parse(scheduleData);
+      setTasks(parsedTasks);
+      if (parsedTasks[taskIndex]) {
+        setCurrentTask(parsedTasks[taskIndex]);
+        setTimeRemaining(parsedTasks[taskIndex].duration_minutes * 60);
       }
-    } catch (error) {
-      console.error("Failed to load from localStorage", error);
-      router.push('/dashboard');
     }
-  }, [router]);
+  }, [taskIndex]);
 
-  // Sync state with URL
   useEffect(() => {
-    if (!isMounted || !schedule) return;
-
-    const taskIndexParam = searchParams.get('taskIndex');
-    const taskIndex = taskIndexParam ? parseInt(taskIndexParam, 10) : -1;
-    
-    if (taskIndex >= 0 && taskIndex < schedule.length) {
-      if (taskIndex !== currentTaskIndex) {
-        // If the task changes via URL, reset the timer state for the new task
-        setIsTimerActive(false);
-        const taskDuration = parseDuration(schedule[taskIndex].duration);
-        setInitialTaskDuration(taskDuration);
-        setTimer(taskDuration);
-      }
-      setCurrentTaskIndex(taskIndex);
-      localStorage.setItem('currentTaskIndex', String(taskIndex));
-    } else if (schedule.length > 0 && taskIndex === -1) {
-        // Default to first task if no valid index is provided
-        router.replace(`/dashboard/focus?taskIndex=0`);
-    }
-
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchParams, isMounted, schedule]);
-
-  // Save progress to localStorage
-  useEffect(() => {
-    if (!isMounted) return;
-    try {
-      localStorage.setItem('completedTasksCount', String(completedTasksCount));
-      localStorage.setItem('totalFocusedTime', String(totalFocusedTime));
-    } catch (error) {
-      console.error("Failed to save progress to localStorage", error);
-    }
-  }, [completedTasksCount, totalFocusedTime, isMounted]);
-
-  // Main timer interval
-  useEffect(() => {
-    let interval: NodeJS.Timeout | undefined;
-    if (isTimerActive && timer > 0) {
+    let interval: NodeJS.Timeout;
+    if (isRunning && timeRemaining > 0) {
       interval = setInterval(() => {
-        setTimer((prev) => prev - 1);
+        setTimeRemaining((prev) => {
+          if (prev <= 1) {
+            handleComplete();
+            return 0;
+          }
+          return prev - 1;
+        });
       }, 1000);
-    } else if (timer === 0 && isTimerActive) {
-      handleCompleteTask(false); // Auto-complete when timer hits zero
     }
     return () => clearInterval(interval);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isTimerActive, timer]);
+  }, [isRunning, timeRemaining]);
 
-  const startTask = useCallback(() => {
-    if (currentTask) {
-      setIsTimerActive(true);
-    }
-  }, [currentTask]);
-
-  const toggleTimer = () => {
-    setIsTimerActive(!isTimerActive);
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
-  const advanceToNextTask = useCallback(() => {
-    const nextIndex = currentTaskIndex + 1;
-    if (schedule && nextIndex < schedule.length) {
-      router.push(`/dashboard/focus?taskIndex=${nextIndex}`);
+  const handleStart = () => setIsRunning(true);
+  const handlePause = () => setIsRunning(false);
+  const handleResume = () => setIsRunning(true);
+
+  const handleComplete = () => {
+    if (taskIndex < tasks.length - 1) {
+      router.push(`/dashboard/focus?task=${taskIndex + 1}`);
     } else {
-      // All tasks complete
-      localStorage.setItem('currentTaskIndex', String(-1));
-      toast({
-        title: "Schedule Complete!",
-        description: "You've finished all your tasks for the day. Well done!",
-      });
       router.push('/dashboard');
     }
-  }, [currentTaskIndex, schedule, router, toast]);
+  };
 
-  const handleCompleteTask = (showToast = true) => {
-    if (!currentTask) return;
-    if (showToast) {
-      toast({
-        title: "Task Complete!",
-        description: `You finished "${currentTask.task}".`,
-      });
+  const handleSkip = () => {
+    if (taskIndex < tasks.length - 1) {
+      router.push(`/dashboard/focus?task=${taskIndex + 1}`);
+    } else {
+      router.push('/dashboard');
     }
-    setCompletedTasksCount((prev) => prev + 1);
-    setTotalFocusedTime((prev) => prev + (initialTaskDuration - timer));
-    advanceToNextTask();
   };
 
-  const handleSkipTask = () => {
-    if (!currentTask) return;
-    toast({
-      title: "Task Skipped",
-      description: `"${currentTask.task}" was skipped.`,
-    });
-    advanceToNextTask();
-  };
-  
-  const formatTime = (seconds: number) => {
-    const minutes = Math.floor(seconds / 60);
-    const remainingSeconds = seconds % 60;
-    return `${String(minutes).padStart(2, "0")}:${String(
-      remainingSeconds
-    ).padStart(2, "0")}`;
-  };
-
-  if (!isMounted || !schedule || !currentTask) {
+  if (!currentTask) {
     return (
-      <div className="flex items-center justify-center h-full">
-        <Loader2 className="h-8 w-8 animate-spin text-accent" />
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <p className="text-xl text-gray-600">No tasks available</p>
+          <button
+            onClick={() => router.push('/dashboard')}
+            className="mt-4 px-6 py-2 bg-black text-white rounded-lg"
+          >
+            Back to Dashboard
+          </button>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col items-center justify-center h-full text-center p-4">
-      <div className={cn("relative h-64 w-64 md:h-80 md:w-80", timer < 60 && timer > 0 && isTimerActive && "pulse-timer")}>
-        <ProgressCircle value={initialTaskDuration - timer} max={initialTaskDuration} />
-        <div className="absolute inset-0 flex flex-col items-center justify-center p-4">
-          <span className="text-6xl md:text-7xl font-bold text-foreground">
-            {formatTime(timer)}
-          </span>
-        </div>
-      </div>
+    <div className="flex flex-col items-center justify-center min-h-screen p-4">
+      <button
+        onClick={() => router.push('/dashboard')}
+        className="absolute top-4 left-4 text-gray-600 hover:text-black"
+      >
+        ← Back to Dashboard
+      </button>
 
-      <h1 className="text-2xl md:text-4xl font-semibold mt-8">{currentTask.task}</h1>
-      <p className="text-muted-foreground mt-2">
-        Task {currentTaskIndex + 1} of {schedule.length}
-      </p>
+      <div className="text-center max-w-md w-full">
+        <p className="text-sm text-gray-600 mb-8">
+          Task {taskIndex + 1} of {tasks.length}
+        </p>
 
-      <div className="mt-10 w-full max-w-sm">
-        {!isTimerStarted || !isTimerActive ? (
-          <Button size="lg" className="w-full h-14 text-lg" onClick={startTask} disabled={isTimerActive}>
-            <Play className="mr-2 h-6 w-6" /> Start Task
-          </Button>
-        ) : (
-          <div className="flex items-center justify-center space-x-4">
-            <Button variant="outline" size="lg" onClick={toggleTimer} className="w-32 h-14 text-lg">
-              {isTimerActive ? <Pause className="mr-2 h-6 w-6" /> : <Play className="mr-2 h-6 w-6" />}
-              {isTimerActive ? "Pause" : "Resume"}
-            </Button>
-            <Button size="lg" onClick={() => handleCompleteTask()} className="w-32 h-14 text-lg">
-              <Check className="mr-2 h-6 w-6" /> Complete
-            </Button>
-            <Button variant="ghost" size="lg" onClick={handleSkipTask} className="w-32 h-14 text-lg">
-              <X className="mr-2 h-6 w-6" /> Skip
-            </Button>
+        <div className="relative w-64 h-64 mx-auto mb-8">
+          <svg className="transform -rotate-90 w-64 h-64">
+            <circle
+              cx="128"
+              cy="128"
+              r="120"
+              stroke="#e5e7eb"
+              strokeWidth="8"
+              fill="none"
+            />
+            <circle
+              cx="128"
+              cy="128"
+              r="120"
+              stroke="#DC143C"
+              strokeWidth="8"
+              fill="none"
+              strokeDasharray={`${2 * Math.PI * 120}`}
+              strokeDashoffset={`${
+                2 * Math.PI * 120 * (1 - timeRemaining / (currentTask.duration_minutes * 60))
+              }`}
+              className="transition-all duration-1000"
+            />
+          </svg>
+          <div className="absolute inset-0 flex items-center justify-center">
+            <div className="text-center">
+              <p className="text-5xl font-bold">{formatTime(timeRemaining)}</p>
+              <p className="text-sm text-gray-600 mt-2">
+                {isRunning ? 'Running' : 'Ready'}
+              </p>
+            </div>
           </div>
+        </div>
+
+        <h1 className="text-3xl font-bold mb-8">{currentTask.name}</h1>
+
+        <div className="space-y-4">
+          {!isRunning && timeRemaining === currentTask.duration_minutes * 60 && (
+            <button
+              onClick={handleStart}
+              className="w-full py-4 bg-[#DC143C] text-white rounded-lg font-semibold hover:bg-[#b30000] transition"
+            >
+              Start Task
+            </button>
+          )}
+
+          {isRunning && (
+            <div className="flex gap-4">
+              <button
+                onClick={handlePause}
+                className="flex-1 py-3 border-2 border-black text-black rounded-lg font-semibold hover:bg-black hover:text-white transition"
+              >
+                Pause
+              </button>
+              <button
+                onClick={handleComplete}
+                className="flex-1 py-3 bg-black text-white rounded-lg font-semibold hover:bg-gray-800 transition"
+              >
+                Complete
+              </button>
+              <button
+                onClick={handleSkip}
+                className="flex-1 py-3 border-2 border-gray-300 text-gray-600 rounded-lg font-semibold hover:bg-gray-100 transition"
+              >
+                Skip
+              </button>
+            </div>
+          )}
+
+          {!isRunning && timeRemaining < currentTask.duration_minutes * 60 && (
+            <div className="flex gap-4">
+              <button
+                onClick={handleResume}
+                className="flex-1 py-3 bg-[#DC143C] text-white rounded-lg font-semibold hover:bg-[#b30000] transition"
+              >
+                Resume
+              </button>
+              <button
+                onClick={handleComplete}
+                className="flex-1 py-3 bg-black text-white rounded-lg font-semibold hover:bg-gray-800 transition"
+              >
+                Complete
+              </button>
+              <button
+                onClick={handleSkip}
+                className="flex-1 py-3 border-2 border-gray-300 text-gray-600 rounded-lg font-semibold hover:bg-gray-100 transition"
+              >
+                Skip
+              </button>
+            </div>
+          )}
+        </div>
+
+        {taskIndex < tasks.length - 1 && (
+          <p className="mt-8 text-gray-600">
+            Up next: {tasks[taskIndex + 1].name}
+          </p>
         )}
       </div>
     </div>
