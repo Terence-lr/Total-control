@@ -833,49 +833,54 @@ export function DashboardClient() {
           </Card>
           
           <Card>
-              <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                      <Zap /> Quick Capture
-                  </CardTitle>
-              </CardHeader>
-              <CardContent className="flex flex-col gap-2">
-                  <Button variant="outline" className="w-full justify-start" onClick={() => setShowVoiceDialog(true)}>
-                      <Mic className="mr-2 h-4 w-4" /> Adjust Schedule
-                  </Button>
-                  <div className="grid grid-cols-2 gap-2">
-                    <QuickCaptureDialog
-                        trigger={<Button variant="outline" className="w-full justify-start"><Plus className="mr-2" /> Just Add This</Button>}
-                        title="Add a Task"
-                        description="Quickly add a new task to your current schedule. The AI will find the best spot for it."
-                        inputLabel="New Task"
-                        confirmText={isUpdating ? "Adding..." : "Add to Schedule"}
-                        isLoading={isUpdating}
-                        onConfirm={handleAddTask}
-                    />
-                    <QuickCaptureDialog
-                        trigger={<Button variant="outline" className="w-full justify-start"><Clock className="mr-2" /> Running Late</Button>}
-                        title="Running Late?"
-                        description="Enter how late you're running, and the AI will shift your upcoming tasks accordingly."
-                        inputLabel="Delay"
-                        confirmText={isAdjusting ? "Adjusting..." : "Adjust Schedule"}
-                        isLoading={isAdjusting}
-                        onConfirm={handleAdjustForDelay}
-                    />
-                  </div>
-                  <Button variant="outline" className="w-full justify-start" onClick={() => {
-                      const completedTasks = schedule?.filter((_,i) => i < completedTasksCount).map(t => t.task).join(', ') || "No tasks completed.";
-                      handleSummarizeDay(`Completed tasks: ${completedTasks}`);
-                  }}>
-                      <Book className="mr-2 h-4 w-4" /> Reflect
-                  </Button>
-              </CardContent>
-          </Card>
+            <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                    <Zap /> Quick Capture
+                </CardTitle>
+            </CardHeader>
+            <CardContent className="grid gap-2 grid-cols-2">
+                <Button variant="outline" className="col-span-2 h-12 text-base" onClick={() => setShowVoiceDialog(true)}>
+                    <Mic className="mr-2 h-5 w-5" /> Adjust Schedule
+                </Button>
 
+                <QuickCaptureDialog
+                    trigger={<Button variant="outline" className="flex-col h-20 gap-1"><Plus className="h-6 w-6" /><span>Just Add This</span></Button>}
+                    title="Add a Task"
+                    description="Quickly add a new task to your current schedule. The AI will find the best spot for it."
+                    inputLabel="New Task"
+                    confirmText={isUpdating ? "Adding..." : "Add to Schedule"}
+                    isLoading={isUpdating}
+                    onConfirm={handleAddTask}
+                />
+                <QuickCaptureDialog
+                    trigger={<Button variant="outline" className="flex-col h-20 gap-1"><Clock className="h-6 w-6" /><span>Running Late</span></Button>}
+                    title="Running Late?"
+                    description="Enter how late you're running, and the AI will shift your upcoming tasks accordingly."
+                    inputLabel="Delay"
+                    confirmText={isAdjusting ? "Adjusting..." : "Adjust Schedule"}
+                    isLoading={isAdjusting}
+                    onConfirm={handleAdjustForDelay}
+                />
+
+                <Button 
+                    variant="outline" 
+                    className="col-span-2 h-12 text-base"
+                    onClick={() => {
+                        const completedTasks = schedule?.filter((_,i) => i < completedTasksCount).map(t => t.task).join(', ') || "No tasks completed.";
+                        handleSummarizeDay(`Completed tasks: ${completedTasks}`);
+                    }}
+                >
+                    <Book className="mr-2 h-5 w-5" /> Reflect on Day
+                </Button>
+            </CardContent>
+          </Card>
         </div>
       </div>
     </>
   );
 }
+
+    
 
     
 
