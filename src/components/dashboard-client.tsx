@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
@@ -109,7 +108,7 @@ export function DashboardClient() {
   } | null>(null);
 
   const isParentGenerating = isGenerating;
-  
+
   const callGenerateSchedule = useCallback(async (input: GenerateScheduleInput) => {
     setIsGenerating(true);
     setTranscript({ interim: '', final: '' });
@@ -225,7 +224,7 @@ export function DashboardClient() {
     setTranscript,
   } = useSpeechRecognition({
       onTranscriptFinal: handleFinalTranscript,
-      isParentGenerating,
+      isParentGenerating: isParentGenerating,
   });
   
   const scheduleIsComplete = schedule && schedule.length > 0 && currentTaskIndex === -1 && completedTasksCount === schedule.length;
@@ -571,66 +570,74 @@ export function DashboardClient() {
             if (!open) { handleCancel(); }
             else { setShowVoiceDialog(true); }
         }}>
-            <DialogContent className="max-w-4xl h-[80vh] flex flex-col p-0">
-                <div className="flex-1 flex flex-col items-center justify-center text-center p-8 bg-background relative">
+            <DialogContent className="max-w-4xl h-[80vh] flex flex-col p-0 bg-transparent border-0 shadow-none">
+                <div className="flex-1 flex flex-col items-center justify-center text-center p-8 relative">
                     
-                    {isRecording ? (
-                        <>
+                    <div className="absolute top-10 text-center w-full max-w-2xl px-4">
+                        {isRecording && (
+                          <div className="min-h-[80px]">
                             <p className="text-2xl text-muted-foreground mb-4">{transcript.interim || "Listening..."}</p>
-                            <p className="text-4xl lg:text-6xl font-bold text-foreground fade-in">{transcript.final}</p>
-                        </>
-                    ) : isGenerating ? (
-                       <div className="flex flex-col items-center gap-4">
-                           <Loader2 className="h-16 w-16 animate-spin text-accent" />
+                            <p className="text-4xl lg:text-5xl font-bold text-foreground fade-in">{transcript.final}</p>
+                          </div>
+                        )}
+                        {isGenerating && (
                            <p className="text-2xl font-medium text-muted-foreground">Thinking...</p>
-                       </div>
-                    ) : clarificationState && clarificationState.questions.length > 0 ? (
-                        <div className="w-full max-w-lg mx-auto text-left fade-in">
-                            <Label className="text-2xl font-semibold mb-4 block">{clarificationState.questions[0]}</Label>
-                            <div className="flex gap-2">
-                                <Textarea
-                                    value={planText}
-                                    onChange={(e) => setPlanText(e.target.value)}
-                                    onKeyDown={handleTextInputKeyDown}
-                                    placeholder="Type your answer... (Cmd+Enter to submit)"
-                                    disabled={isGenerating}
-                                    className="text-lg"
-                                    rows={2}
-                                />
-                                 <Button size="lg" onClick={() => handleClarificationResponse(planText)} disabled={!planText.trim() || isGenerating}>
-                                   {isGenerating ? <Loader2 className="animate-spin" /> : <ArrowRight />}
-                                 </Button>
-                             </div>
-                        </div>
-                    ) : (
-                        <p className="text-2xl font-medium text-muted-foreground">Tap the mic to start speaking</p>
-                    )}
+                        )}
+                        {clarificationState && clarificationState.questions.length > 0 && (
+                            <div className="w-full max-w-lg mx-auto text-left fade-in">
+                                <Label className="text-2xl font-semibold mb-4 block text-center">{clarificationState.questions[0]}</Label>
+                                <div className="flex gap-2">
+                                    <Textarea
+                                        value={planText}
+                                        onChange={(e) => setPlanText(e.target.value)}
+                                        onKeyDown={handleTextInputKeyDown}
+                                        placeholder="Type your answer... (Cmd+Enter to submit)"
+                                        disabled={isGenerating}
+                                        className="text-lg"
+                                        rows={2}
+                                    />
+                                    <Button size="lg" onClick={() => handleClarificationResponse(planText)} disabled={!planText.trim() || isGenerating}>
+                                      {isGenerating ? <Loader2 className="animate-spin" /> : <ArrowRight />}
+                                    </Button>
+                                </div>
+                            </div>
+                        )}
+                    </div>
                     
-                </div>
-                 <DialogFooter className="bg-secondary/30 border-t p-6 flex flex-col items-center justify-center gap-4 h-64">
-                    {!isRecording && !isGenerating && (
-                        <Button 
-                            onClick={startRecognition} 
-                            disabled={!isAvailable} 
-                            className="h-32 w-32 rounded-full bg-accent hover:bg-accent/90 text-accent-foreground shadow-lg"
-                        >
-                            <Mic className="h-16 w-16" />
-                        </Button>
-                    )}
-                    {isRecording && (
-                        <>
-                            <div className="text-2xl font-mono text-foreground mb-2">{formatTime(recordingTime)}</div>
-                             <Button 
-                                onClick={handleStop}
-                                className="h-20 w-48 rounded-full bg-accent hover:bg-accent/90 text-accent-foreground text-xl font-bold shadow-lg pulse-red"
+                    <div className="flex flex-col items-center justify-center gap-6">
+                        {!isRecording && !isGenerating && !clarificationState && (
+                            <Button 
+                                onClick={startRecognition} 
+                                disabled={!isAvailable} 
+                                className="h-32 w-32 rounded-full bg-accent hover:bg-accent/90 text-accent-foreground shadow-lg"
                             >
-                               <StopCircle className="mr-3 h-8 w-8" /> Done
+                                <Mic className="h-16 w-16" />
                             </Button>
-                            <Button variant="ghost" onClick={handleCancel}>Cancel</Button>
-                        </>
-                    )}
-                    {error && <p className="text-sm text-destructive absolute bottom-2 left-4">{error}</p>}
-                </DialogFooter>
+                        )}
+                        {isRecording && (
+                            <div className="relative">
+                                <Button 
+                                    onClick={handleStop}
+                                    className="h-32 w-32 rounded-full bg-accent hover:bg-accent/90 text-accent-foreground shadow-lg pulse-red"
+                                >
+                                  <StopCircle className="h-16 w-16" />
+                                </Button>
+                                <div className="absolute -bottom-10 left-1/2 -translate-x-1/2 text-xl font-mono text-foreground">{formatTime(recordingTime)}</div>
+                            </div>
+                        )}
+                         {isGenerating && <Loader2 className="h-16 w-16 animate-spin text-accent" />}
+                    </div>
+                    
+                    <div className="absolute bottom-8 text-center w-full">
+                         {isRecording ? (
+                              <Button variant="ghost" onClick={handleCancel}>Cancel</Button>
+                         ) : !isGenerating && (
+                              <p className="text-muted-foreground text-sm">Tap the mic to start speaking</p>
+                         )}
+                         {error && <p className="text-sm text-destructive mt-2">{error}</p>}
+                    </div>
+
+                </div>
             </DialogContent>
         </Dialog>
     );
@@ -838,33 +845,35 @@ export function DashboardClient() {
                     <Zap /> Quick Capture
                 </CardTitle>
             </CardHeader>
-            <CardContent className="grid gap-2 grid-cols-2">
-                <Button variant="outline" className="col-span-2 h-12 text-base" onClick={() => setShowVoiceDialog(true)}>
+            <CardContent className="grid gap-2">
+                <Button variant="outline" className="w-full h-12 text-base justify-start" onClick={() => setShowVoiceDialog(true)}>
                     <Mic className="mr-2 h-5 w-5" /> Adjust Schedule
                 </Button>
 
-                <QuickCaptureDialog
-                    trigger={<Button variant="outline" className="flex-col h-20 gap-1"><Plus className="h-6 w-6" /><span>Just Add This</span></Button>}
-                    title="Add a Task"
-                    description="Quickly add a new task to your current schedule. The AI will find the best spot for it."
-                    inputLabel="New Task"
-                    confirmText={isUpdating ? "Adding..." : "Add to Schedule"}
-                    isLoading={isUpdating}
-                    onConfirm={handleAddTask}
-                />
-                <QuickCaptureDialog
-                    trigger={<Button variant="outline" className="flex-col h-20 gap-1"><Clock className="h-6 w-6" /><span>Running Late</span></Button>}
-                    title="Running Late?"
-                    description="Enter how late you're running, and the AI will shift your upcoming tasks accordingly."
-                    inputLabel="Delay"
-                    confirmText={isAdjusting ? "Adjusting..." : "Adjust Schedule"}
-                    isLoading={isAdjusting}
-                    onConfirm={handleAdjustForDelay}
-                />
+                <div className="grid grid-cols-2 gap-2">
+                  <QuickCaptureDialog
+                      trigger={<Button variant="outline" className="flex-col h-20 gap-1"><Plus className="h-6 w-6" /><span>Just Add This</span></Button>}
+                      title="Add a Task"
+                      description="Quickly add a new task to your current schedule. The AI will find the best spot for it."
+                      inputLabel="New Task"
+                      confirmText={isUpdating ? "Adding..." : "Add to Schedule"}
+                      isLoading={isUpdating}
+                      onConfirm={handleAddTask}
+                  />
+                  <QuickCaptureDialog
+                      trigger={<Button variant="outline" className="flex-col h-20 gap-1"><Clock className="h-6 w-6" /><span>Running Late</span></Button>}
+                      title="Running Late?"
+                      description="Enter how late you're running, and the AI will shift your upcoming tasks accordingly."
+                      inputLabel="Delay"
+                      confirmText={isAdjusting ? "Adjusting..." : "Adjust Schedule"}
+                      isLoading={isAdjusting}
+                      onConfirm={handleAdjustForDelay}
+                  />
+                </div>
 
                 <Button 
                     variant="outline" 
-                    className="col-span-2 h-12 text-base"
+                    className="w-full h-12 text-base justify-start"
                     onClick={() => {
                         const completedTasks = schedule?.filter((_,i) => i < completedTasksCount).map(t => t.task).join(', ') || "No tasks completed.";
                         handleSummarizeDay(`Completed tasks: ${completedTasks}`);
@@ -879,9 +888,3 @@ export function DashboardClient() {
     </>
   );
 }
-
-    
-
-    
-
-    
