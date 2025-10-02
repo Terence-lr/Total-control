@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import Link from "next/link";
 import { Mic, Plus, Clock, Calendar as CalendarIcon, Zap, Pause, Play, Check, X, Loader2, Award, BrainCircuit, Bot, Sparkles, Book, Lightbulb, ArrowRight, NotebookText, FileInput, Square, PlayCircle, StopCircle, Hourglass, List, Edit } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -28,7 +28,6 @@ import { useToast } from "@/hooks/use-toast";
 import { useSpeechRecognition } from "@/hooks/use-speech-recognition";
 import { useDebouncedCallback } from "@/hooks/use-debounced-callback";
 import { cn } from "@/lib/utils";
-import { z } from "zod";
 import {
   Accordion,
   AccordionContent,
@@ -37,57 +36,37 @@ import {
 } from "@/components/ui/accordion"
 import { Textarea } from "@/components/ui/textarea";
 import { useRouter } from "next/navigation";
+import { useFirebase, useUser, useMemoFirebase } from "@/firebase";
+import { collection, query, orderBy, where } from "firebase/firestore";
+import { useCollection, WithId } from "@/firebase/firestore/use-collection";
+import { Task, createTask } from "@/firebase/firestore/mutations";
+import { format, parseISO, isToday } from 'date-fns';
 
-
-// Schema for a single event, consistent with generate-schedule flow
-const ScheduleEventSchema = z.object({
-  time: z.string().describe('The start time of the event (e.g., "09:00 AM").'),
-  task: z.string().describe('A short description of the task or event.'),
-  duration: z.string().describe('The estimated duration of the event (e.g., "45min", "1hr").'),
-});
-type ScheduleEvent = z.infer<typeof ScheduleEventSchema>;
 
 type LiveTask = ExtractTasksFromTranscriptOutput['tasks'][0];
-
 type Conversation = { question: string; answer: string };
 
-const parseDuration = (durationStr: string): number => {
+const parseDuration = (durationStr: string | number | undefined): number => {
+  if (typeof durationStr === 'number') return durationStr * 60;
   if (!durationStr) return 25 * 60;
-  const minutesMatch = durationStr.match(/(\d+)\s*min/);
+  const minutesMatch = String(durationStr).match(/(\d+)\s*min/);
   if (minutesMatch) {
     return parseInt(minutesMatch[1], 10) * 60;
   }
-  const hourMatch = durationStr.match(/(\d+)\s*hr/);
+  const hourMatch = String(durationStr).match(/(\d+)\s*hr/);
   if (hourMatch) {
     return parseInt(hourMatch[1], 10) * 3600;
   }
-  // Fallback for just a number, assuming minutes
-  const numberMatch = durationStr.match(/^(\d+)$/);
+  const numberMatch = String(durationStr).match(/^(\d+)$/);
   if (numberMatch) {
     return parseInt(numberMatch[1], 10) * 60;
   }
-  return 25 * 60; // Default to 25 minutes if parsing fails
-};
-
-const timeToMinutes = (timeStr: string): number => {
-  if (!timeStr) return 0;
-  const [time, period] = timeStr.split(' ');
-  if (!time) return 0;
-  let [hours, minutes] = time.split(':').map(Number);
-
-  if (period && period.toLowerCase() === 'pm' && hours !== 12) {
-    hours += 12;
-  }
-  if (period && period.toLowerCase() === 'am' && hours === 12) {
-    hours = 0;
-  }
-  return hours * 60 + (minutes || 0);
+  return 25 * 60; // Default
 };
 
 
 export function DashboardClient() {
   const [planText, setPlanText] = useState("");
-  const [schedule, setSchedule] = useState<ScheduleEvent[] | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
   const [isAdjusting, setIsAdjusting] = useState(false);
@@ -103,7 +82,6 @@ export function DashboardClient() {
   const [completedTasksCount, setCompletedTasksCount] = useState(0);
   const [currentTime, setCurrentTime] = useState<GetCurrentTimeOutput | null>(null);
   const [isMounted, setIsMounted] = useState(false);
-  const [tomorrowsPlan, setTomorrowsPlan] = useState<string | null>(null);
   const [showVoiceDialog, setShowVoiceDialog] = useState(false);
   const [liveTasks, setLiveTasks] = useState<LiveTask[]>([]);
   
@@ -113,9 +91,30 @@ export function DashboardClient() {
     originalPlan: string;
   } | null>(null);
 
+  const { user, isUserLoading } = useUser();
+  const { firestore } = useFirebase();
+  
+  const todayStr = format(new Date(), 'yyyy-MM-dd');
+  const tasksQuery = useMemoFirebase(() => {
+    if (!user || !firestore) return null;
+    return query(
+        collection(firestore, 'users', user.uid, 'tasks'), 
+        where('date', '==', todayStr),
+        orderBy('scheduled_time', 'asc')
+    );
+  }, [user, firestore, todayStr]);
+
+  const { data: schedule, isLoading: areTasksLoading } = useCollection<Task>(tasksQuery);
+  
   const isParentGenerating = isGenerating || isUpdating;
 
   const callGenerateSchedule = useCallback(async (input: GenerateScheduleInput) => {
+    if (!firestore || !user) {
+      toast({ title: "Error", description: "Must be logged in to generate a schedule.", variant: "destructive" });
+      setIsGenerating(false);
+      return;
+    }
+    
     setIsGenerating(true);
     setTranscript({ interim: '', final: '' });
     setLiveTasks([]);
@@ -129,11 +128,14 @@ export function DashboardClient() {
                 conversation: prev?.conversation || [],
                 originalPlan: input.plan,
             }));
-            setSchedule(null);
-        } else if (result.schedule && result.schedule.length > 0) {
-            const initialSchedule = result.schedule;
-            setSchedule(initialSchedule);
-            setCurrentTaskIndex(0); 
+        } else if (result.tasks && result.tasks.length > 0) {
+            for (const task of result.tasks) {
+                await createTask(firestore, user.uid, {
+                    ...task,
+                    date: input.currentDate, // Ensure date is set
+                });
+            }
+            toast({ title: "Schedule Created", description: "Your tasks for today have been added to your timeline." });
             setClarificationState(null);
             setShowVoiceDialog(false);
             setIsTimerStarted(true);
@@ -156,7 +158,7 @@ export function DashboardClient() {
     } finally {
         setIsGenerating(false);
     }
-  }, [toast]);
+  }, [firestore, user, toast]);
 
   const handleAddTask = useCallback(async (request: string) => {
     if (!schedule) {
@@ -165,6 +167,10 @@ export function DashboardClient() {
         description: "Generate a schedule before adding new tasks.",
         variant: "destructive",
       });
+      return;
+    }
+     if (!firestore || !user) {
+      toast({ title: "Error", description: "Must be logged in to add tasks.", variant: "destructive" });
       return;
     }
     if (!request.trim()) {
@@ -181,23 +187,31 @@ export function DashboardClient() {
     setShowVoiceDialog(false);
 
     try {
-      const result: AddTaskToScheduleOutput = await addTaskToSchedule({
-        existingSchedule: schedule,
+      const scheduleForAI = schedule.map(t => ({
+          time: t.scheduled_time || "N/A",
+          task: t.name,
+          duration: t.duration_minutes?.toString() || "N/A",
+      }));
+        
+      const result = await addTaskToSchedule({
+        existingSchedule: scheduleForAI,
         request: request,
+        currentDate: format(new Date(), 'yyyy-MM-dd'),
         currentTime: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
       });
       
-      if (result.needs_clarification && result.clarifying_question) {
-          // TODO: Handle clarification for adjustments
-          toast({
-              title: "Needs Clarification",
-              description: result.clarifying_question,
-          });
-      } else {
-        setSchedule(result.schedule);
+      if (result.newTasks && result.newTasks.length > 0) {
+        for (const task of result.newTasks) {
+            await createTask(firestore, user.uid, task);
+        }
         toast({
           title: "Schedule Updated",
           description: result.changes_summary || "Your schedule has been updated.",
+        });
+      } else {
+         toast({
+          title: "No changes made",
+          description: "I didn't find any new tasks to add.",
         });
       }
 
@@ -211,8 +225,8 @@ export function DashboardClient() {
     } finally {
       setIsUpdating(false);
     }
-  }, [schedule, toast]);
-
+  }, [schedule, toast, firestore, user]);
+  
   const handleGenerateSchedule = useCallback((plan: string) => {
     if (!plan.trim()) {
       toast({
@@ -223,17 +237,13 @@ export function DashboardClient() {
       return;
     }
     setClarificationState(null);
-    setSchedule(null);
     setCurrentTaskIndex(-1);
     setIsTimerStarted(false);
     setCompletedTasksCount(0);
     setSummary(null);
-    if (tomorrowsPlan === plan) {
-      setTomorrowsPlan(null); // Clear tomorrow's plan once it's used
-    }
 
-    callGenerateSchedule({ plan });
-  }, [toast, callGenerateSchedule, tomorrowsPlan]);
+    callGenerateSchedule({ plan, currentDate: format(new Date(), 'yyyy-MM-dd') });
+  }, [toast, callGenerateSchedule]);
 
   const handleClarificationResponse = useCallback((answer: string) => {
     if (!clarificationState || !answer.trim()) return;
@@ -244,7 +254,6 @@ export function DashboardClient() {
         { question: currentQuestion, answer: answer },
     ];
     
-    // Optimistically remove the answered question
     const remainingQuestions = clarificationState.questions.slice(1);
 
     setClarificationState(prev => {
@@ -256,12 +265,13 @@ export function DashboardClient() {
         }
     });
     
-    setPlanText(''); // Clear the input after submitting answer
+    setPlanText('');
     
     if (remainingQuestions.length === 0) {
         callGenerateSchedule({
             plan: clarificationState.originalPlan,
             conversationHistory: updatedConversation,
+            currentDate: format(new Date(), 'yyyy-MM-dd'),
         });
     }
   }, [clarificationState, callGenerateSchedule]);
@@ -269,7 +279,7 @@ export function DashboardClient() {
   const handleFinalTranscript = useCallback((text: string) => {
     if (clarificationState) {
         handleClarificationResponse(text);
-    } else if (schedule) {
+    } else if (schedule && schedule.length > 0) {
         handleAddTask(text);
     } else {
         handleGenerateSchedule(text);
@@ -301,9 +311,8 @@ export function DashboardClient() {
       setLiveTasks(result.tasks);
     } catch (e) {
       console.error("Error parsing transcript:", e);
-      // Don't show toast for this, it's a background process
     }
-  }, 500); // 500ms debounce delay
+  }, 500);
 
   useEffect(() => {
     if (isRecording) {
@@ -321,60 +330,34 @@ export function DashboardClient() {
   
   const scheduleIsComplete = schedule && schedule.length > 0 && currentTaskIndex === -1 && completedTasksCount === schedule.length;
 
-  // Load from localStorage on mount
   useEffect(() => {
     setIsMounted(true);
+    // Remove localStorage logic for schedule as it's now from Firestore
     try {
-      const savedSchedule = localStorage.getItem('schedule');
-      const savedCurrentTaskIndex = localStorage.getItem('currentTaskIndex');
-      const savedCompletedTasks = localStorage.getItem('completedTasksCount');
-      const savedTomorrowsPlan = localStorage.getItem('tomorrowsPlan');
-
-      if (savedTomorrowsPlan) {
-        setTomorrowsPlan(savedTomorrowsPlan);
-      }
-
-      if (savedSchedule) {
-        const parsedSchedule = JSON.parse(savedSchedule);
-        setSchedule(parsedSchedule);
+        const savedCurrentTaskIndex = localStorage.getItem('currentTaskIndex');
+        const savedCompletedTasks = localStorage.getItem('completedTasksCount');
         
         const taskIndex = savedCurrentTaskIndex ? parseInt(savedCurrentTaskIndex, 10) : -1;
         setCurrentTaskIndex(taskIndex);
         if (taskIndex !== -1) {
             setIsTimerStarted(true);
         }
-
         setCompletedTasksCount(savedCompletedTasks ? parseInt(savedCompletedTasks, 10) : 0);
-      }
+
     } catch (error) {
       console.error("Failed to load from localStorage", error);
     }
   }, []);
 
-  // Save to localStorage whenever state changes
   useEffect(() => {
-    if (!isMounted) return; // Don't save on initial server render
+    if (!isMounted) return;
     try {
-      if (schedule) {
-        localStorage.setItem('schedule', JSON.stringify(schedule));
         localStorage.setItem('currentTaskIndex', String(currentTaskIndex));
         localStorage.setItem('completedTasksCount', String(completedTasksCount));
-      } else {
-        localStorage.removeItem('schedule');
-        localStorage.removeItem('currentTaskIndex');
-        localStorage.removeItem('completedTasksCount');
-      }
-
-      if (tomorrowsPlan) {
-        localStorage.setItem('tomorrowsPlan', tomorrowsPlan);
-      } else {
-        localStorage.removeItem('tomorrowsPlan');
-      }
-
     } catch (error) {
       console.error("Failed to save to localStorage", error);
     }
-  }, [schedule, currentTaskIndex, completedTasksCount, isMounted, tomorrowsPlan]);
+  }, [currentTaskIndex, completedTasksCount, isMounted]);
 
 
   useEffect(() => {
@@ -393,44 +376,13 @@ export function DashboardClient() {
   }, []);
 
   const handleAdjustForDelay = async (delay: string) => {
-    if (!schedule) {
-      toast({
-        title: "No active schedule",
-        description: "Generate a schedule before adjusting it.",
-        variant: "destructive",
-      });
-      return;
-    }
-    if (!delay.trim()) {
-      toast({
-        title: "Delay is empty",
-        description: "Please enter a delay duration (e.g., '15 minutes').",
-        variant: "destructive",
-      });
-      return;
-    }
-    setIsAdjusting(true);
-    try {
-      const result = await adjustScheduleForDelay({
-        existingSchedule: schedule,
-        delayDuration: delay,
-        currentTime: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
-      });
-      setSchedule(result.schedule);
-      toast({
-        title: "Schedule Adjusted",
-        description: "Your timeline has been updated for the delay.",
-      });
-    } catch (error) {
-      console.error("Error adjusting schedule:", error);
-      toast({
-        title: "Error",
-        description: "Failed to adjust schedule. Please try again.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsAdjusting(false);
-    }
+    // This needs to be re-thought with Firestore-backed tasks.
+    // For now, we'll disable it or show a toast.
+    toast({
+        title: "Feature coming soon",
+        description: "Adjusting for delays is being reworked for the new database structure.",
+    });
+    return;
   };
 
   const handleSummarizeDay = async (activities: string) => {
@@ -452,21 +404,6 @@ export function DashboardClient() {
     }
   };
 
-  const handlePlanTomorrow = (plan: string) => {
-    if (!plan.trim()) {
-      toast({
-        title: "Plan is empty",
-        description: "Please enter your plan for tomorrow.",
-        variant: "destructive",
-      });
-      return;
-    }
-    setTomorrowsPlan(plan);
-    toast({
-        title: "Tomorrow's Plan Noted!",
-        description: "Your plan for tomorrow has been saved. Ready for a productive day!",
-    });
-  }
 
   const QuickCaptureDialog = ({
     trigger,
@@ -549,29 +486,8 @@ export function DashboardClient() {
   );
 
   const calculateNowPosition = () => {
-    if (!schedule || schedule.length === 0 || !currentTime) {
-      return null;
-    }
-  
-    const nowInMinutes = currentTime.hours * 60 + currentTime.minutes;
-  
-    const firstEventMinutes = timeToMinutes(schedule[0].time);
-    const lastEvent = schedule[schedule.length - 1];
-    const lastEventMinutes = timeToMinutes(lastEvent.time) + (parseDuration(lastEvent.duration) / 60);
-  
-    if (nowInMinutes < firstEventMinutes || nowInMinutes > lastEventMinutes) {
-      return null;
-    }
-  
-    // Estimate total height: 10 (space-y) + (4+4) (padding) for each item approx
-    // And each li is roughly 60px high.
-    const totalPixels = schedule.length * (60 + 10); 
-    const totalMinutes = lastEventMinutes - firstEventMinutes;
-  
-    const minutesFromStart = nowInMinutes - firstEventMinutes;
-    const percentageThroughDay = minutesFromStart / totalMinutes;
-  
-    return percentageThroughDay * totalPixels;
+    // This will need adjustment if we bring back the timeline visual
+    return null;
   };
 
   const nowPosition = calculateNowPosition();
@@ -597,6 +513,8 @@ export function DashboardClient() {
       remainingSeconds
     ).padStart(2, "0")}`;
   };
+  
+  const isLoadingState = isUserLoading || areTasksLoading;
 
   if (!isMounted) {
       return (
@@ -725,7 +643,7 @@ export function DashboardClient() {
                               <Button variant="ghost" onClick={handleCancel}>Cancel</Button>
                          ) : !isLoading && (
                               <p className="text-muted-foreground text-sm">
-                                {schedule ? "Tap to make an adjustment" : "Tap the mic to start speaking"}
+                                {schedule && schedule.length > 0 ? "Tap to make an adjustment" : "Tap the mic to start speaking"}
                               </p>
                          )}
                          {error && <p className="text-sm text-destructive mt-2">{error}</p>}
@@ -806,7 +724,7 @@ export function DashboardClient() {
                           isLoading={isSummarizing}
                           multiline={true}
                           onConfirm={(thoughts) => {
-                              const completedTasks = schedule?.map(t => t.task).join(', ');
+                              const completedTasks = schedule?.filter(t => t.completed).map(t => t.name).join(', ');
                               const fullContext = `Completed tasks: ${completedTasks}. Additional thoughts: ${thoughts}`;
                               handleSummarizeDay(fullContext);
                           }}
@@ -837,7 +755,7 @@ export function DashboardClient() {
             </Card>
           )}
           
-          {!schedule && !isGenerating && !clarificationState &&(
+          {(!schedule || schedule.length === 0) && !isLoadingState && !isGenerating && !clarificationState &&(
               <Card className="min-h-[200px]">
                   <CardHeader>
                       <CardTitle className="text-2xl">Plan Your Day</CardTitle>
@@ -857,11 +775,11 @@ export function DashboardClient() {
               <CardTitle>Today's Timeline</CardTitle>
             </CardHeader>
             <CardContent>
-              {isGenerating ? (
+              {isLoadingState || isGenerating ? (
                 <div className="flex justify-center items-center h-40">
                   <Loader2 className="h-8 w-8 animate-spin text-accent" />
                 </div>
-              ) : schedule ? (
+              ) : schedule && schedule.length > 0 ? (
                 <div className="relative">
                   {nowPosition !== null && (
                       <div
@@ -875,21 +793,21 @@ export function DashboardClient() {
                   <ul className="space-y-4">
                     {schedule.map((event, index) => (
                       <li
-                        key={index}
+                        key={event.id}
                         className={cn(
                           "flex items-start gap-4 p-4 rounded-lg transition-all border",
-                          index < completedTasksCount && "opacity-50 bg-muted/50",
+                          event.completed && "opacity-50 bg-muted/50",
                           index === currentTaskIndex && "bg-accent/10 border-accent",
                         )}
                       >
                         <Link href={`/dashboard/focus?taskIndex=${index}`} className="flex-1 flex items-start gap-4">
                           <div className="flex flex-col items-center">
-                            <span className="font-bold text-sm">{event.time}</span>
+                            <span className="font-bold text-sm">{event.scheduled_time}</span>
                             <div className="w-px h-6 bg-border my-1"></div>
-                            <span className="text-xs text-muted-foreground">{event.duration}</span>
+                            <span className="text-xs text-muted-foreground">{event.duration_minutes} min</span>
                           </div>
                           <div className="flex-1 pt-1">
-                            <p className="font-medium">{event.task}</p>
+                            <p className="font-medium">{event.name}</p>
                           </div>
                         </Link>
                       </li>
@@ -943,11 +861,6 @@ export function DashboardClient() {
                   <Button className="mt-4 w-full" onClick={() => handleGenerateSchedule(planText)} disabled={!planText.trim() || isGenerating}>
                       {isGenerating ? <><Loader2 className="mr-2 h-4 w-4 animate-spin"/> Generating...</> : "Generate Schedule"}
                   </Button>
-                  {tomorrowsPlan && (
-                      <Button variant="outline" className="w-full mt-2" onClick={() => handleGenerateSchedule(tomorrowsPlan)}>
-                          <Sparkles className="mr-2 h-4 w-4"/> Start with yesterday's plan
-                      </Button>
-                  )}
               </CardContent>
           </Card>
           
@@ -987,7 +900,7 @@ export function DashboardClient() {
                     variant="outline" 
                     className="w-full h-12 text-base justify-start"
                     onClick={() => {
-                        const completedTasks = schedule?.filter((_,i) => i < completedTasksCount).map(t => t.task).join(', ') || "No tasks completed.";
+                        const completedTasks = schedule?.filter((t) => t.completed).map(t => t.name).join(', ') || "No tasks completed.";
                         handleSummarizeDay(`Completed tasks: ${completedTasks}`);
                     }}
                 >
