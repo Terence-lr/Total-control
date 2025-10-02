@@ -99,7 +99,7 @@ export function DashboardClient() {
 
   const [currentTaskIndex, setCurrentTaskIndex] = useState(-1);
   const [isTimerStarted, setIsTimerStarted] = useState(false);
-  const [isTimerActive, setIsTimerActive] = useState(false);
+  const [isTimerActive, setIsTimerActive] = useState(isTimerStarted);
   const [completedTasksCount, setCompletedTasksCount] = useState(0);
   const [currentTime, setCurrentTime] = useState<GetCurrentTimeOutput | null>(null);
   const [isMounted, setIsMounted] = useState(false);
@@ -1000,3 +1000,5 @@ export function DashboardClient() {
     </>
   );
 }
+
+    
