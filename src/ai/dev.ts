@@ -21,3 +21,4 @@ import '@/ai/flows/generate-schedule.ts';
 import '@/ai/flows/add-task-to-schedule.ts';
 import '@/ai/flows/adjust-schedule-for-delay.ts';
 import '@/ai/flows/get-current-time.ts';
+import '@/ai/flows/extract-tasks-from-transcript.ts';

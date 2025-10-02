@@ -3,7 +3,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
-import { Mic, Plus, Clock, Calendar as CalendarIcon, Zap, Pause, Play, Check, X, Loader2, Award, BrainCircuit, Bot, Sparkles, Book, Lightbulb, ArrowRight, NotebookText, FileInput, Square, PlayCircle, StopCircle } from "lucide-react";
+import { Mic, Plus, Clock, Calendar as CalendarIcon, Zap, Pause, Play, Check, X, Loader2, Award, BrainCircuit, Bot, Sparkles, Book, Lightbulb, ArrowRight, NotebookText, FileInput, Square, PlayCircle, StopCircle, Hourglass, List, Edit } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardFooter, CardDescription } from "@/components/ui/card";
 import {
@@ -19,11 +19,14 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { generateSchedule, GenerateScheduleInput, GenerateScheduleOutput } from "@/ai/flows/generate-schedule";
-import { addTaskToSchedule } from "@/ai/flows/add-task-to-schedule";
+import { addTaskToSchedule, AddTaskToScheduleInput, AddTaskToScheduleOutput } from "@/ai/flows/add-task-to-schedule";
 import { adjustScheduleForDelay } from "@/ai/flows/adjust-schedule-for-delay";
 import { summarizeDay, SummarizeDayOutput } from "@/ai/flows/summarize-day";
 import { getCurrentTime, GetCurrentTimeOutput } from "@/ai/flows/get-current-time";
+import { extractTasksFromTranscript, ExtractTasksFromTranscriptOutput } from "@/ai/flows/extract-tasks-from-transcript";
 import { useToast } from "@/hooks/use-toast";
+import { useSpeechRecognition } from "@/hooks/use-speech-recognition";
+import { useDebouncedCallback } from "@/hooks/use-debounced-callback";
 import { cn } from "@/lib/utils";
 import { z } from "zod";
 import {
@@ -33,7 +36,6 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion"
 import { Textarea } from "@/components/ui/textarea";
-import { useSpeechRecognition } from "@/hooks/use-speech-recognition";
 import { useRouter } from "next/navigation";
 
 
@@ -44,6 +46,8 @@ const ScheduleEventSchema = z.object({
   duration: z.string().describe('The estimated duration of the event (e.g., "45min", "1hr").'),
 });
 type ScheduleEvent = z.infer<typeof ScheduleEventSchema>;
+
+type LiveTask = ExtractTasksFromTranscriptOutput['tasks'][0];
 
 type Conversation = { question: string; answer: string };
 
@@ -101,6 +105,7 @@ export function DashboardClient() {
   const [isMounted, setIsMounted] = useState(false);
   const [tomorrowsPlan, setTomorrowsPlan] = useState<string | null>(null);
   const [showVoiceDialog, setShowVoiceDialog] = useState(false);
+  const [liveTasks, setLiveTasks] = useState<LiveTask[]>([]);
   
   const [clarificationState, setClarificationState] = useState<{
     questions: string[];
@@ -108,11 +113,12 @@ export function DashboardClient() {
     originalPlan: string;
   } | null>(null);
 
-  const isParentGenerating = isGenerating;
+  const isParentGenerating = isGenerating || isUpdating;
 
   const callGenerateSchedule = useCallback(async (input: GenerateScheduleInput) => {
     setIsGenerating(true);
     setTranscript({ interim: '', final: '' });
+    setLiveTasks([]);
 
     try {
         const result = await generateSchedule(input);
@@ -205,7 +211,7 @@ export function DashboardClient() {
     }
   }, [clarificationState, callGenerateSchedule]);
 
-  const handleAddTask = useCallback(async (newTaskRequest: string) => {
+  const handleAddTask = useCallback(async (request: string) => {
     if (!schedule) {
       toast({
         title: "No active schedule",
@@ -214,7 +220,7 @@ export function DashboardClient() {
       });
       return;
     }
-    if (!newTaskRequest.trim()) {
+    if (!request.trim()) {
       toast({
         title: "Task is empty",
         description: "Please enter a task to add.",
@@ -225,9 +231,9 @@ export function DashboardClient() {
     setIsUpdating(true);
     setShowVoiceDialog(false);
     try {
-      const result = await addTaskToSchedule({
+      const result: AddTaskToScheduleOutput = await addTaskToSchedule({
         existingSchedule: schedule,
-        request: newTaskRequest,
+        request: request,
         currentTime: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
       });
       
@@ -281,6 +287,33 @@ export function DashboardClient() {
       onTranscriptFinal: handleFinalTranscript,
       isParentGenerating: isParentGenerating,
   });
+
+  const debouncedParseTranscript = useDebouncedCallback(async (text: string) => {
+    if (!text.trim()) {
+      setLiveTasks([]);
+      return;
+    }
+    try {
+      const result = await extractTasksFromTranscript({ transcript: text });
+      setLiveTasks(result.tasks);
+    } catch (e) {
+      console.error("Error parsing transcript:", e);
+      // Don't show toast for this, it's a background process
+    }
+  }, 500); // 500ms debounce delay
+
+  useEffect(() => {
+    if (isRecording) {
+      const fullTranscript = transcript.final + transcript.interim;
+      debouncedParseTranscript(fullTranscript);
+    }
+  }, [transcript, isRecording, debouncedParseTranscript]);
+
+  const startVoiceSession = () => {
+    setLiveTasks([]);
+    startRecognition();
+    setShowVoiceDialog(true);
+  }
   
   const scheduleIsComplete = schedule && schedule.length > 0 && currentTaskIndex === -1 && completedTasksCount === schedule.length;
 
@@ -590,44 +623,66 @@ export function DashboardClient() {
                 <div className="flex-1 flex flex-col items-center justify-center text-center p-8 relative">
                     
                     <div className="absolute top-10 text-center w-full max-w-2xl px-4">
+                      {isRecording && !liveTasks.length && (
                         <div className="min-h-[80px]">
-                            {isRecording && (
-                                <>
-                                    <p className="text-2xl text-muted-foreground mb-4">{transcript.interim || "Listening..."}</p>
-                                    <p className="text-4xl lg:text-5xl font-bold text-foreground fade-in">{transcript.final}</p>
-                                </>
-                            )}
-                            {isLoading && (
-                               <p className="text-2xl font-medium text-muted-foreground">Thinking...</p>
-                            )}
-                            {clarificationState && clarificationState.questions.length > 0 && !isLoading && (
-                                <div className="w-full max-w-lg mx-auto text-left fade-in">
-                                    <Label className="text-2xl font-semibold mb-4 block text-center">{clarificationState.questions[0]}</Label>
-                                    <div className="flex gap-2">
-                                        <Textarea
-                                            value={planText}
-                                            onChange={(e) => setPlanText(e.target.value)}
-                                            onKeyDown={handleTextInputKeyDown}
-                                            placeholder="Type your answer... (Cmd+Enter to submit)"
-                                            disabled={isLoading}
-                                            className="text-lg"
-                                            rows={2}
-                                        />
-                                        <Button size="lg" onClick={() => handleClarificationResponse(planText)} disabled={!planText.trim() || isLoading}>
-                                          {isLoading ? <Loader2 className="animate-spin" /> : <ArrowRight />}
-                                        </Button>
-                                    </div>
-                                </div>
-                            )}
+                           <p className="text-2xl text-muted-foreground mb-4">{transcript.interim || "Listening..."}</p>
+                           <p className="text-4xl lg:text-5xl font-bold text-foreground fade-in">{transcript.final}</p>
                         </div>
+                      )}
+
+                      {liveTasks.length > 0 && (
+                        <Card className="text-left bg-background/80 backdrop-blur-sm max-h-[50vh] overflow-y-auto">
+                          <CardHeader>
+                            <CardTitle className="flex items-center gap-2"><Mic/> Tasks I'm hearing...</CardTitle>
+                          </CardHeader>
+                          <CardContent className="space-y-4">
+                            {liveTasks.map((task, index) => (
+                              <div key={index} className="p-3 rounded-lg border bg-background/50">
+                                <p className="font-semibold text-lg">{task.name}</p>
+                                <div className="flex items-center gap-4 text-sm text-muted-foreground mt-1">
+                                  {task.time && <span className="flex items-center gap-1"><CalendarIcon className="w-4 h-4"/> {task.time}</span>}
+                                  {task.duration && <span className="flex items-center gap-1"><Hourglass className="w-4 h-4"/> {task.duration}</span>}
+                                  {task.status === 'needs_info' && !task.time && !task.duration && (
+                                    <span className="text-xs italic">More details needed...</span>
+                                  )}
+                                </div>
+                              </div>
+                            ))}
+                          </CardContent>
+                        </Card>
+                      )}
+
+                      {isLoading && (
+                          <p className="text-2xl font-medium text-muted-foreground">Thinking...</p>
+                      )}
+                      
+                      {clarificationState && clarificationState.questions.length > 0 && !isLoading && (
+                          <div className="w-full max-w-lg mx-auto text-left fade-in">
+                              <Label className="text-2xl font-semibold mb-4 block text-center">{clarificationState.questions[0]}</Label>
+                              <div className="flex gap-2">
+                                  <Textarea
+                                      value={planText}
+                                      onChange={(e) => setPlanText(e.target.value)}
+                                      onKeyDown={handleTextInputKeyDown}
+                                      placeholder="Type your answer... (Cmd+Enter to submit)"
+                                      disabled={isLoading}
+                                      className="text-lg"
+                                      rows={2}
+                                  />
+                                  <Button size="lg" onClick={() => handleClarificationResponse(planText)} disabled={!planText.trim() || isLoading}>
+                                    {isLoading ? <Loader2 className="animate-spin" /> : <ArrowRight />}
+                                  </Button>
+                              </div>
+                          </div>
+                      )}
                     </div>
                     
-                    <div className="flex flex-col items-center justify-center gap-6">
+                    <div className="flex flex-col items-center justify-center gap-6 mt-auto absolute bottom-24">
                         {!isRecording && !isLoading && !clarificationState && (
                             <Button 
-                                onClick={startRecognition} 
+                                onClick={startVoiceSession} 
                                 disabled={!isAvailable} 
-                                className="h-32 w-32 rounded-full bg-accent hover:bg-accent/90 text-accent-foreground shadow-lg"
+                                className="h-32 w-32 rounded-full bg-accent hover:bg-accent/90 text-accent-foreground shadow-lg animate-pulse-ring"
                             >
                                 <Mic className="h-16 w-16" />
                             </Button>
@@ -770,7 +825,7 @@ export function DashboardClient() {
                       <CardDescription>Tell the AI assistant what you need to do, and it will create a schedule for you.</CardDescription>
                   </CardHeader>
                   <CardContent className="flex flex-col items-center justify-center gap-4">
-                      <Button onClick={() => setShowVoiceDialog(true)} className="h-24 w-24 rounded-full bg-accent hover:bg-accent/90 text-accent-foreground shadow-lg">
+                      <Button onClick={startVoiceSession} className="h-24 w-24 rounded-full bg-accent hover:bg-accent/90 text-accent-foreground shadow-lg">
                           <Mic className="h-12 w-12" />
                       </Button>
                       <p className="text-muted-foreground text-sm">Tap to speak your plan</p>
@@ -866,7 +921,7 @@ export function DashboardClient() {
                 </CardTitle>
             </CardHeader>
             <CardContent className="grid gap-2">
-                <Button variant="outline" className="w-full h-12 text-base justify-start" onClick={() => setShowVoiceDialog(true)}>
+                <Button variant="outline" className="w-full h-12 text-base justify-start" onClick={startVoiceSession}>
                     <Mic className="mr-2 h-5 w-5" /> Adjust Schedule
                 </Button>
 
