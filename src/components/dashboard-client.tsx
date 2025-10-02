@@ -21,10 +21,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { generateSchedule, GenerateScheduleInput, GenerateScheduleOutput } from "@/ai/flows/generate-schedule";
 import { addTaskToSchedule, AddTaskToScheduleInput, AddTaskToScheduleOutput } from "@/ai/flows/add-task-to-schedule";
-import { adjustScheduleForDelay } from "@/ai/flows/adjust-schedule-for-delay";
+import { adjustScheduleForDelay, AdjustScheduleForDelayInput, AdjustScheduleForDelayOutput } from "@/ai/flows/adjust-schedule-for-delay";
 import { summarizeDay, SummarizeDayOutput } from "@/ai/flows/summarize-day";
 import { getCurrentTime, GetCurrentTimeOutput } from "@/ai/flows/get-current-time";
-import { extractTasksFromTranscript, ExtractTasksFromTranscriptOutput } from "@/ai/flows/extract-tasks-from-transcript";
+import { extractTasksFromTranscript, ExtractTasksFromTranscriptInput, ExtractTasksFromTranscriptOutput } from "@/ai/flows/extract-tasks-from-transcript";
 import { useToast } from "@/hooks/use-toast";
 import { useSpeechRecognition } from "@/hooks/use-speech-recognition";
 import { useDebouncedCallback } from "@/hooks/use-debounced-callback";
@@ -614,7 +614,10 @@ export function DashboardClient() {
     };
 
     const isLoading = isGenerating || isUpdating;
-
+    const showLiveTranscript = isRecording && !liveTasks.length && !clarificationState;
+    const showTaskCards = liveTasks.length > 0 && !clarificationState;
+    const showClarification = clarificationState && clarificationState.questions.length > 0 && !isLoading;
+    
     return (
         <Dialog open={showVoiceDialog} onOpenChange={(open) => {
             if (!open) { handleCancel(); }
@@ -623,16 +626,16 @@ export function DashboardClient() {
             <DialogContent className="max-w-4xl h-[80vh] flex flex-col p-0 bg-transparent border-0 shadow-none">
                 <div className="flex-1 flex flex-col items-center justify-center text-center p-8 relative">
                     
-                    <div className="absolute top-10 text-center w-full max-w-2xl px-4">
-                      {isRecording && !liveTasks.length && (
-                        <div className="min-h-[80px]">
+                    <div className="absolute top-10 text-center w-full max-w-2xl px-4 min-h-[300px]">
+                      {showLiveTranscript && (
+                        <div className="fade-in">
                            <p className="text-2xl text-muted-foreground mb-4">{transcript.interim || "Listening..."}</p>
-                           <p className="text-4xl lg:text-5xl font-bold text-foreground fade-in">{transcript.final}</p>
+                           <p className="text-4xl lg:text-5xl font-bold text-foreground">{transcript.final}</p>
                         </div>
                       )}
 
-                      {liveTasks.length > 0 && (
-                        <Card className="text-left bg-background/80 backdrop-blur-sm max-h-[50vh] overflow-y-auto">
+                      {showTaskCards && (
+                        <Card className="text-left bg-background/80 backdrop-blur-sm max-h-[50vh] overflow-y-auto fade-in">
                           <CardHeader>
                             <CardTitle className="flex items-center gap-2"><Mic/> Tasks I'm hearing...</CardTitle>
                           </CardHeader>
@@ -653,11 +656,7 @@ export function DashboardClient() {
                         </Card>
                       )}
 
-                      {isLoading && (
-                          <p className="text-2xl font-medium text-muted-foreground">Thinking...</p>
-                      )}
-                      
-                      {clarificationState && clarificationState.questions.length > 0 && !isLoading && (
+                      {showClarification && (
                           <div className="w-full max-w-lg mx-auto text-left fade-in">
                               <Label className="text-2xl font-semibold mb-4 block text-center">{clarificationState.questions[0]}</Label>
                               <div className="flex gap-2">
@@ -674,6 +673,12 @@ export function DashboardClient() {
                                     {isLoading ? <Loader2 className="animate-spin" /> : <ArrowRight />}
                                   </Button>
                               </div>
+                          </div>
+                      )}
+
+                      {isLoading && (
+                          <div className="fade-in">
+                            <p className="text-2xl font-medium text-muted-foreground">Thinking...</p>
                           </div>
                       )}
                     </div>
