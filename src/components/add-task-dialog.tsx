@@ -18,59 +18,63 @@ import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar as CalendarIcon, Loader2 } from "lucide-react";
 import { format } from "date-fns";
-import { useFirebase, useUser } from "@/firebase";
-import { createTask } from "@/firebase/firestore/mutations";
+import { useSupabase } from "@/supabase/provider";
+import { db } from "@/supabase/database";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 
 interface AddTaskDialogProps {
     open: boolean;
     onOpenChange: (open: boolean) => void;
+    onTaskAdded?: () => void;
 }
 
-export function AddTaskDialog({ open, onOpenChange }: AddTaskDialogProps) {
-    const { firestore } = useFirebase();
-    const { user } = useUser();
+export function AddTaskDialog({ open, onOpenChange, onTaskAdded }: AddTaskDialogProps) {
+    const { user } = useSupabase();
     const { toast } = useToast();
 
-    const [name, setName] = useState('');
+    const [title, setTitle] = useState('');
+    const [description, setDescription] = useState('');
     const [date, setDate] = useState<Date | undefined>(new Date());
-    const [time, setTime] = useState('');
-    const [duration, setDuration] = useState(30);
+    const [priority, setPriority] = useState<'low' | 'medium' | 'high'>('medium');
     const [isSaving, setIsSaving] = useState(false);
 
     const handleSaveTask = async () => {
-        if (!firestore || !user) {
-            toast({ title: "Error", description: "Could not connect to database. Please try again.", variant: "destructive"});
+        if (!user) {
+            toast({ title: "Error", description: "You must be logged in to create tasks.", variant: "destructive"});
             return;
         }
-        if (!name.trim()) {
-            toast({ title: "Task name is required", variant: "destructive" });
+        if (!title.trim()) {
+            toast({ title: "Task title is required", variant: "destructive" });
             return;
         }
 
         setIsSaving(true);
         try {
-            await createTask(firestore, user.uid, {
-                name,
-                date: date ? format(date, 'yyyy-MM-dd') : undefined,
-                scheduled_time: time || undefined,
-                duration_minutes: duration,
-                type: 'task',
-                notes: '',
+            const { data, error } = await db.createTask({
+                user_id: user.id,
+                title: title.trim(),
+                description: description.trim() || undefined,
+                due_date: date ? date.toISOString() : undefined,
+                priority,
+                completed: false
             });
 
-            toast({ title: "Task Created", description: `"${name}" has been added.` });
-            onOpenChange(false);
-            // Reset form
-            setName('');
-            setDate(new Date());
-            setTime('');
-            setDuration(30);
+            if (error) throw error;
 
-        } catch (error) {
+            toast({ title: "Task Created", description: `"${title}" has been added.` });
+            onOpenChange(false);
+            onTaskAdded?.();
+            
+            // Reset form
+            setTitle('');
+            setDescription('');
+            setDate(new Date());
+            setPriority('medium');
+
+        } catch (error: any) {
             console.error("Error creating task:", error);
-            toast({ title: "Error", description: "Failed to create task.", variant: "destructive" });
+            toast({ title: "Error", description: error.message || "Failed to create task.", variant: "destructive" });
         } finally {
             setIsSaving(false);
         }
@@ -87,15 +91,27 @@ export function AddTaskDialog({ open, onOpenChange }: AddTaskDialogProps) {
                 </DialogHeader>
                 <div className="grid gap-4 py-4">
                     <div className="grid grid-cols-4 items-center gap-4">
-                        <Label htmlFor="name" className="text-right">
-                            Task
+                        <Label htmlFor="title" className="text-right">
+                            Title
                         </Label>
                         <Input
-                            id="name"
-                            value={name}
-                            onChange={(e) => setName(e.target.value)}
+                            id="title"
+                            value={title}
+                            onChange={(e) => setTitle(e.target.value)}
                             className="col-span-3"
                             placeholder="e.g. Morning workout"
+                        />
+                    </div>
+                    <div className="grid grid-cols-4 items-center gap-4">
+                        <Label htmlFor="description" className="text-right">
+                            Description
+                        </Label>
+                        <Input
+                            id="description"
+                            value={description}
+                            onChange={(e) => setDescription(e.target.value)}
+                            className="col-span-3"
+                            placeholder="Optional description"
                         />
                     </div>
                     <div className="grid grid-cols-4 items-center gap-4">
@@ -125,32 +141,20 @@ export function AddTaskDialog({ open, onOpenChange }: AddTaskDialogProps) {
                             </PopoverContent>
                         </Popover>
                     </div>
-                     <div className="grid grid-cols-4 items-center gap-4">
-                        <Label htmlFor="time" className="text-right">
-                            Time
+                    <div className="grid grid-cols-4 items-center gap-4">
+                        <Label htmlFor="priority" className="text-right">
+                            Priority
                         </Label>
-                        <Input
-                            id="time"
-                            type="time"
-                            value={time}
-                            onChange={(e) => setTime(e.target.value)}
-                            className="col-span-3"
-                        />
-                    </div>
-                     <div className="grid grid-cols-4 items-center gap-4">
-                        <Label htmlFor="duration" className="text-right">
-                            Duration
-                        </Label>
-                         <Input
-                            id="duration"
-                            type="number"
-                            value={duration}
-                            onChange={(e) => setDuration(parseInt(e.target.value, 10))}
-                            className="col-span-2"
-                            min="5"
-                            step="5"
-                        />
-                        <span className="col-span-1 text-sm text-muted-foreground">minutes</span>
+                        <select
+                            id="priority"
+                            value={priority}
+                            onChange={(e) => setPriority(e.target.value as 'low' | 'medium' | 'high')}
+                            className="col-span-3 px-3 py-2 border border-input bg-background rounded-md"
+                        >
+                            <option value="low">Low</option>
+                            <option value="medium">Medium</option>
+                            <option value="high">High</option>
+                        </select>
                     </div>
                 </div>
                 <DialogFooter>

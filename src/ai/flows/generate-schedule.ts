@@ -11,7 +11,7 @@
 
 import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
-import type { Task } from '@/components/tasks-client';
+import type { Task } from '@/supabase/database';
 
 
 const GenerateScheduleInputSchema = z.object({

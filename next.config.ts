@@ -3,10 +3,10 @@ import type {NextConfig} from 'next';
 const nextConfig: NextConfig = {
   /* config options here */
   typescript: {
-    ignoreBuildErrors: true,
+    ignoreBuildErrors: false, // Enable type checking in production
   },
   eslint: {
-    ignoreDuringBuilds: true,
+    ignoreDuringBuilds: false, // Enable linting in production
   },
   images: {
     remotePatterns: [
@@ -29,6 +29,18 @@ const nextConfig: NextConfig = {
         pathname: '/**',
       },
     ],
+  },
+  // Optimize for production
+  compress: true,
+  poweredByHeader: false,
+  generateEtags: false,
+  // Ensure proper environment variable handling
+  env: {
+    CUSTOM_KEY: process.env.CUSTOM_KEY,
+  },
+  // Enable experimental features for better performance
+  experimental: {
+    optimizePackageImports: ['lucide-react', '@radix-ui/react-icons'],
   },
 };
 

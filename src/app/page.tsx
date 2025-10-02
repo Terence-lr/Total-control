@@ -1,23 +1,23 @@
 
 'use client';
 
-import { useUser } from '@/firebase';
+import { useSupabase } from '@/supabase/provider';
 import { redirect } from 'next/navigation';
 import { useEffect } from 'react';
 import { Loader2 } from 'lucide-react';
 
 export default function RootPage() {
-  const { user, isUserLoading } = useUser();
+  const { user, loading } = useSupabase();
 
   useEffect(() => {
-    if (!isUserLoading) {
+    if (!loading) {
       if (user) {
         redirect('/dashboard');
       } else {
         redirect('/login');
       }
     }
-  }, [user, isUserLoading]);
+  }, [user, loading]);
 
   return (
     <div className="flex h-screen w-full items-center justify-center">

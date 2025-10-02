@@ -29,7 +29,8 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { PlaceHolderImages } from "@/lib/placeholder-images";
-import { useAuth, useUser } from "@/firebase";
+import { useSupabase } from "@/supabase/provider";
+import { auth } from "@/supabase/auth";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -55,11 +56,9 @@ const settingsNavItems = [
 export function AppLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const userAvatar = PlaceHolderImages.find((p) => p.id === 'user-avatar');
-  const { user, isUserLoading } = useUser();
-  const auth = useAuth();
+  const { user, loading } = useSupabase();
 
-
-  if (isUserLoading) {
+  if (loading) {
     return (
         <div className="flex h-screen items-center justify-center">
             <Loader2 className="h-8 w-8 animate-spin text-accent" />
@@ -71,8 +70,8 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     redirect('/login');
   }
 
-  const handleLogout = () => {
-    auth.signOut();
+  const handleLogout = async () => {
+    await auth.signOut();
   };
 
   const getInitials = (name?: string | null) => {
@@ -134,13 +133,13 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                 <Button variant="ghost" className="h-auto w-full justify-start p-2">
                     <div className="flex w-full items-center gap-3">
                         <Avatar className="h-9 w-9">
-                        {user.photoURL ? <AvatarImage src={user.photoURL} alt="User Avatar" /> : userAvatar && <AvatarImage src={userAvatar.imageUrl} alt="User Avatar" />}
-                        <AvatarFallback>{getInitials(user.displayName)}</AvatarFallback>
+                        {user.avatar_url ? <AvatarImage src={user.avatar_url} alt="User Avatar" /> : userAvatar && <AvatarImage src={userAvatar.imageUrl} alt="User Avatar" />}
+                        <AvatarFallback>{getInitials(user.full_name)}</AvatarFallback>
                         </Avatar>
                         <div className="flex flex-col items-start truncate">
-                            <span className="text-sm font-medium truncate">{user.isAnonymous ? "Anonymous User" : user.displayName || 'Unnamed User'}</span>
+                            <span className="text-sm font-medium truncate">{user.full_name || 'Unnamed User'}</span>
                             <span className="text-xs text-muted-foreground truncate">
-                               {user.isAnonymous ? "No email" : user.email || 'No email'}
+                               {user.email || 'No email'}
                             </span>
                         </div>
                     </div>
@@ -149,9 +148,9 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             <DropdownMenuContent className="w-56 mb-2" align="end" forceMount>
                 <DropdownMenuLabel className="font-normal">
                     <div className="flex flex-col space-y-1">
-                        <p className="text-sm font-medium leading-none">{user.isAnonymous ? "Anonymous User" : user.displayName || 'Unnamed User'}</p>
+                        <p className="text-sm font-medium leading-none">{user.full_name || 'Unnamed User'}</p>
                         <p className="text-xs leading-none text-muted-foreground">
-                             {user.isAnonymous ? "No email" : user.email}
+                             {user.email}
                         </p>
                     </div>
                 </DropdownMenuLabel>
