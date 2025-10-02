@@ -9,6 +9,7 @@ interface SpeechRecognitionOptions {
   interimResults?: boolean;
   maxRecordingTime?: number; // in seconds
   onTranscriptFinal?: (finalTranscript: string) => void;
+  isParentGenerating?: boolean;
 }
 
 interface Transcript {
@@ -23,10 +24,10 @@ export const useSpeechRecognition = (options: SpeechRecognitionOptions = {}) => 
     interimResults = true,
     maxRecordingTime = 90, // 1.5 minutes
     onTranscriptFinal,
+    isParentGenerating = false,
   } = options;
 
   const [isRecording, setIsRecording] = useState(false);
-  const [isProcessing, setIsProcessing] = useState(false);
   const [isAvailable, setIsAvailable] = useState(false);
   const [transcript, setTranscript] = useState<Transcript>({ interim: '', final: '' });
   const [error, setError] = useState<string | null>(null);
@@ -93,7 +94,6 @@ export const useSpeechRecognition = (options: SpeechRecognitionOptions = {}) => 
     interimTranscript.current = '';
     
     setIsRecording(true);
-    setIsProcessing(false);
     startTimer();
 
     const recognition = recognitionRef.current;
@@ -126,7 +126,6 @@ export const useSpeechRecognition = (options: SpeechRecognitionOptions = {}) => 
         setError(`Error: ${event.error}`);
       }
       setIsRecording(false);
-      setIsProcessing(false);
       stopTimer();
     };
 
@@ -157,7 +156,6 @@ export const useSpeechRecognition = (options: SpeechRecognitionOptions = {}) => 
     if (timeoutRef.current) {
         clearTimeout(timeoutRef.current);
     }
-    setIsProcessing(false);
     setTranscript({ interim: '', final: '' });
     accumulatedFinalTranscript.current = '';
     interimTranscript.current = '';
@@ -181,7 +179,6 @@ export const useSpeechRecognition = (options: SpeechRecognitionOptions = {}) => 
   
   return {
     isRecording,
-    isProcessing,
     isAvailable,
     transcript,
     startRecognition,

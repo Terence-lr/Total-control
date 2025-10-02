@@ -94,6 +94,8 @@ export function DashboardClient() {
   const router = useRouter();
 
   const [currentTaskIndex, setCurrentTaskIndex] = useState(-1);
+  const [isTimerStarted, setIsTimerStarted] = useState(false);
+  const [isTimerActive, setIsTimerActive] = useState(false);
   const [completedTasksCount, setCompletedTasksCount] = useState(0);
   const [currentTime, setCurrentTime] = useState<GetCurrentTimeOutput | null>(null);
   const [isMounted, setIsMounted] = useState(false);
@@ -107,7 +109,6 @@ export function DashboardClient() {
   } | null>(null);
   
   const handleFinalTranscript = useCallback((text: string) => {
-    // This function will now be called by stopRecognition, not automatically.
     if (clarificationState) {
         handleClarificationResponse(text);
     } else {
@@ -117,7 +118,6 @@ export function DashboardClient() {
 
   const {
     isRecording,
-    isProcessing,
     isAvailable,
     transcript,
     startRecognition,
@@ -128,9 +128,8 @@ export function DashboardClient() {
     setTranscript,
   } = useSpeechRecognition({
       onTranscriptFinal: handleFinalTranscript,
+      isParentGenerating: isGenerating,
   });
-  
-  const processingOrGenerating = isProcessing || isGenerating;
   
   const scheduleIsComplete = schedule && schedule.length > 0 && currentTaskIndex === -1 && completedTasksCount === schedule.length;
 
@@ -153,6 +152,9 @@ export function DashboardClient() {
         
         const taskIndex = savedCurrentTaskIndex ? parseInt(savedCurrentTaskIndex, 10) : -1;
         setCurrentTaskIndex(taskIndex);
+        if (taskIndex !== -1) {
+            setIsTimerStarted(true);
+        }
 
         setCompletedTasksCount(savedCompletedTasks ? parseInt(savedCompletedTasks, 10) : 0);
       }
@@ -223,7 +225,7 @@ export function DashboardClient() {
             setCurrentTaskIndex(0); 
             setClarificationState(null);
             setShowVoiceDialog(false);
-            router.push(`/dashboard/focus?taskIndex=0`);
+            setIsTimerStarted(true);
         } else {
             toast({
                 title: "Empty Schedule",
@@ -243,7 +245,7 @@ export function DashboardClient() {
     } finally {
         setIsGenerating(false);
     }
-  }, [setTranscript, toast, router]);
+  }, [setTranscript, toast]);
 
   const handleGenerateSchedule = useCallback((plan: string) => {
     if (!plan.trim()) {
@@ -257,6 +259,7 @@ export function DashboardClient() {
     setClarificationState(null);
     setSchedule(null);
     setCurrentTaskIndex(-1);
+    setIsTimerStarted(false);
     setCompletedTasksCount(0);
     setSummary(null);
     if (tomorrowsPlan === plan) {
@@ -576,7 +579,7 @@ export function DashboardClient() {
                             <p className="text-2xl text-muted-foreground mb-4">{transcript.interim || "Listening..."}</p>
                             <p className="text-4xl lg:text-6xl font-bold text-foreground fade-in">{transcript.final}</p>
                         </>
-                    ) : processingOrGenerating ? (
+                    ) : isGenerating ? (
                        <div className="flex flex-col items-center gap-4">
                            <Loader2 className="h-16 w-16 animate-spin text-accent" />
                            <p className="text-2xl font-medium text-muted-foreground">Thinking...</p>
@@ -590,12 +593,12 @@ export function DashboardClient() {
                                     onChange={(e) => setPlanText(e.target.value)}
                                     onKeyDown={handleTextInputKeyDown}
                                     placeholder="Type your answer... (Cmd+Enter to submit)"
-                                    disabled={processingOrGenerating}
+                                    disabled={isGenerating}
                                     className="text-lg"
                                     rows={2}
                                 />
-                                 <Button size="lg" onClick={() => handleClarificationResponse(planText)} disabled={!planText.trim() || processingOrGenerating}>
-                                   {processingOrGenerating ? <Loader2 className="animate-spin" /> : <ArrowRight />}
+                                 <Button size="lg" onClick={() => handleClarificationResponse(planText)} disabled={!planText.trim() || isGenerating}>
+                                   {isGenerating ? <Loader2 className="animate-spin" /> : <ArrowRight />}
                                  </Button>
                              </div>
                         </div>
@@ -605,7 +608,7 @@ export function DashboardClient() {
                     
                 </div>
                  <DialogFooter className="bg-secondary/30 border-t p-6 flex flex-col items-center justify-center gap-4 h-64">
-                    {!isRecording && !processingOrGenerating && (
+                    {!isRecording && !isGenerating && (
                         <Button 
                             onClick={startRecognition} 
                             disabled={!isAvailable} 
@@ -716,12 +719,18 @@ export function DashboardClient() {
             <CardHeader>
               <CardTitle>Focus Mode</CardTitle>
               <CardContent className="flex justify-center items-center pt-6">
-                <Button asChild variant="default" size="lg">
-                  <Link href={`/dashboard/focus?taskIndex=${currentTaskIndex}`}>
-                    <PlayCircle className="mr-2 h-5 w-5" />
-                    {currentTaskIndex > 0 ? "Resume Day" : "Start Day"}
-                  </Link>
-                </Button>
+                 {!isTimerStarted ? (
+                    <Button size="lg" className="w-full h-14 text-lg" onClick={() => router.push(`/dashboard/focus?taskIndex=${currentTaskIndex}`)} disabled={isTimerActive}>
+                        <Play className="mr-2 h-6 w-6" /> Start Day
+                    </Button>
+                ) : (
+                    <Button asChild variant="default" size="lg">
+                        <Link href={`/dashboard/focus?taskIndex=${currentTaskIndex}`}>
+                            <PlayCircle className="mr-2 h-5 w-5" />
+                            {currentTaskIndex > 0 ? "Resume Day" : "Start Day"}
+                        </Link>
+                    </Button>
+                )}
               </CardContent>
             </CardHeader>
           </Card>
