@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from "react";
@@ -113,7 +114,7 @@ export function DashboardClient() {
   } | null>(null);
 
   const isParentGenerating = isGenerating || isUpdating;
-
+  
   const callGenerateSchedule = useCallback(async (input: GenerateScheduleInput) => {
     setIsGenerating(true);
     setTranscript({ interim: '', final: '' });
@@ -261,7 +262,7 @@ export function DashboardClient() {
       setIsUpdating(false);
     }
   }, [schedule, toast]);
-  
+
   const handleFinalTranscript = useCallback((text: string) => {
     if (clarificationState) {
         handleClarificationResponse(text);
@@ -613,7 +614,7 @@ export function DashboardClient() {
 
     const isLoading = isGenerating || isUpdating;
     const showLiveTranscript = isRecording && !liveTasks.length && !clarificationState;
-    const showTaskCards = liveTasks.length > 0 && !clarificationState;
+    const showTaskCards = isRecording && liveTasks.length > 0 && !clarificationState;
     const showClarification = clarificationState && clarificationState.questions.length > 0 && !isLoading;
     
     return (
@@ -985,3 +986,7 @@ export function DashboardClient() {
     </>
   );
 }
+
+    
+
+    
