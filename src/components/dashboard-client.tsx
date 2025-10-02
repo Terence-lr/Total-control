@@ -289,7 +289,7 @@ export function DashboardClient() {
   });
 
   const debouncedParseTranscript = useDebouncedCallback(async (text: string) => {
-    if (!text.trim()) {
+    if (!text.trim() || clarificationState) {
       setLiveTasks([]);
       return;
     }
@@ -964,7 +964,7 @@ export function DashboardClient() {
                       description="Enter how late you're running, and the AI will shift your upcoming tasks accordingly."
                       inputLabel="Delay"
                       confirmText={isAdjusting ? "Adjusting..." : "Adjust Schedule"}
-                      isLoading={isAdjusting}
+isLoading={isAdjusting}
                       onConfirm={handleAdjustForDelay}
                   />
                 </div>
@@ -986,7 +986,3 @@ export function DashboardClient() {
     </>
   );
 }
-
-    
-
-    
