@@ -838,29 +838,31 @@ export function DashboardClient() {
                       <Zap /> Quick Capture
                   </CardTitle>
               </CardHeader>
-              <CardContent className="grid grid-cols-2 gap-2">
-                  <QuickCaptureDialog
-                      trigger={<Button variant="outline" className="w-full"><Plus className="mr-2" /> Just Add This</Button>}
-                      title="Add a Task"
-                      description="Quickly add a new task to your current schedule. The AI will find the best spot for it."
-                      inputLabel="New Task"
-                      confirmText={isUpdating ? "Adding..." : "Add to Schedule"}
-                      isLoading={isUpdating}
-                      onConfirm={handleAddTask}
-                  />
-                  <QuickCaptureDialog
-                      trigger={<Button variant="outline" className="w-full"><Clock className="mr-2" /> Running Late</Button>}
-                      title="Running Late?"
-                      description="Enter how late you're running, and the AI will shift your upcoming tasks accordingly."
-                      inputLabel="Delay"
-                      confirmText={isAdjusting ? "Adjusting..." : "Adjust Schedule"}
-                      isLoading={isAdjusting}
-                      onConfirm={handleAdjustForDelay}
-                  />
-                  <Button variant="outline" className="w-full" onClick={() => setShowVoiceDialog(true)}>
+              <CardContent className="flex flex-col gap-2">
+                  <Button variant="outline" className="w-full justify-start" onClick={() => setShowVoiceDialog(true)}>
                       <Mic className="mr-2 h-4 w-4" /> Adjust Schedule
                   </Button>
-                  <Button variant="outline" className="w-full" onClick={() => {
+                  <div className="grid grid-cols-2 gap-2">
+                    <QuickCaptureDialog
+                        trigger={<Button variant="outline" className="w-full justify-start"><Plus className="mr-2" /> Just Add This</Button>}
+                        title="Add a Task"
+                        description="Quickly add a new task to your current schedule. The AI will find the best spot for it."
+                        inputLabel="New Task"
+                        confirmText={isUpdating ? "Adding..." : "Add to Schedule"}
+                        isLoading={isUpdating}
+                        onConfirm={handleAddTask}
+                    />
+                    <QuickCaptureDialog
+                        trigger={<Button variant="outline" className="w-full justify-start"><Clock className="mr-2" /> Running Late</Button>}
+                        title="Running Late?"
+                        description="Enter how late you're running, and the AI will shift your upcoming tasks accordingly."
+                        inputLabel="Delay"
+                        confirmText={isAdjusting ? "Adjusting..." : "Adjust Schedule"}
+                        isLoading={isAdjusting}
+                        onConfirm={handleAdjustForDelay}
+                    />
+                  </div>
+                  <Button variant="outline" className="w-full justify-start" onClick={() => {
                       const completedTasks = schedule?.filter((_,i) => i < completedTasksCount).map(t => t.task).join(', ') || "No tasks completed.";
                       handleSummarizeDay(`Completed tasks: ${completedTasks}`);
                   }}>
@@ -874,5 +876,7 @@ export function DashboardClient() {
     </>
   );
 }
+
+    
 
     
