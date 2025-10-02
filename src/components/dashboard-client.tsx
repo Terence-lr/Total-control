@@ -114,7 +114,7 @@ export function DashboardClient() {
   } | null>(null);
 
   const isParentGenerating = isGenerating || isUpdating;
-  
+
   const callGenerateSchedule = useCallback(async (input: GenerateScheduleInput) => {
     setIsGenerating(true);
     setTranscript({ interim: '', final: '' });
@@ -157,7 +157,7 @@ export function DashboardClient() {
         setIsGenerating(false);
     }
   }, [toast]);
-  
+
   const handleGenerateSchedule = useCallback((plan: string) => {
     if (!plan.trim()) {
       toast({
@@ -179,37 +179,6 @@ export function DashboardClient() {
 
     callGenerateSchedule({ plan });
   }, [toast, callGenerateSchedule, tomorrowsPlan]);
-  
-  const handleClarificationResponse = useCallback((answer: string) => {
-    if (!clarificationState || !answer.trim()) return;
-
-    const currentQuestion = clarificationState.questions[0];
-    const updatedConversation: Conversation[] = [
-        ...clarificationState.conversation,
-        { question: currentQuestion, answer: answer },
-    ];
-    
-    // Optimistically remove the answered question
-    const remainingQuestions = clarificationState.questions.slice(1);
-
-    setClarificationState(prev => {
-        if (!prev) return null;
-        return {
-            ...prev,
-            conversation: updatedConversation,
-            questions: remainingQuestions,
-        }
-    });
-    
-    setPlanText(''); // Clear the input after submitting answer
-    
-    if (remainingQuestions.length === 0) {
-        callGenerateSchedule({
-            plan: clarificationState.originalPlan,
-            conversationHistory: updatedConversation,
-        });
-    }
-  }, [clarificationState, callGenerateSchedule]);
 
   const handleAddTask = useCallback(async (request: string) => {
     if (!schedule) {
@@ -229,7 +198,10 @@ export function DashboardClient() {
       return;
     }
     setIsUpdating(true);
+    setLiveTasks([]);
+    setTranscript({ interim: '', final: '' });
     setShowVoiceDialog(false);
+
     try {
       const result: AddTaskToScheduleOutput = await addTaskToSchedule({
         existingSchedule: schedule,
@@ -262,6 +234,37 @@ export function DashboardClient() {
       setIsUpdating(false);
     }
   }, [schedule, toast]);
+
+  const handleClarificationResponse = useCallback((answer: string) => {
+    if (!clarificationState || !answer.trim()) return;
+
+    const currentQuestion = clarificationState.questions[0];
+    const updatedConversation: Conversation[] = [
+        ...clarificationState.conversation,
+        { question: currentQuestion, answer: answer },
+    ];
+    
+    // Optimistically remove the answered question
+    const remainingQuestions = clarificationState.questions.slice(1);
+
+    setClarificationState(prev => {
+        if (!prev) return null;
+        return {
+            ...prev,
+            conversation: updatedConversation,
+            questions: remainingQuestions,
+        }
+    });
+    
+    setPlanText(''); // Clear the input after submitting answer
+    
+    if (remainingQuestions.length === 0) {
+        callGenerateSchedule({
+            plan: clarificationState.originalPlan,
+            conversationHistory: updatedConversation,
+        });
+    }
+  }, [clarificationState, callGenerateSchedule]);
 
   const handleFinalTranscript = useCallback((text: string) => {
     if (clarificationState) {
@@ -311,6 +314,7 @@ export function DashboardClient() {
 
   const startVoiceSession = () => {
     setLiveTasks([]);
+    setTranscript({ interim: '', final: '' });
     startRecognition();
     setShowVoiceDialog(true);
   }
@@ -964,7 +968,7 @@ export function DashboardClient() {
                       description="Enter how late you're running, and the AI will shift your upcoming tasks accordingly."
                       inputLabel="Delay"
                       confirmText={isAdjusting ? "Adjusting..." : "Adjust Schedule"}
-isLoading={isAdjusting}
+                      isLoading={isAdjusting}
                       onConfirm={handleAdjustForDelay}
                   />
                 </div>
