@@ -819,7 +819,7 @@ export function DashboardClient() {
             </Card>
           )}
           
-          {!schedule && !isGenerating && (
+          {!schedule && !isGenerating && !clarificationState &&(
               <Card className="min-h-[200px]">
                   <CardHeader>
                       <CardTitle className="text-2xl">Plan Your Day</CardTitle>
@@ -877,6 +877,24 @@ export function DashboardClient() {
                       </li>
                     ))}
                   </ul>
+                </div>
+              ) : clarificationState ? (
+                <div className="w-full max-w-lg mx-auto text-left fade-in p-4 border rounded-lg bg-background">
+                    <Label className="text-lg font-semibold mb-4 block text-center">{clarificationState.questions[0]}</Label>
+                    <div className="flex gap-2">
+                        <Textarea
+                            value={planText}
+                            onChange={(e) => setPlanText(e.target.value)}
+                            onKeyDown={handleTextInputKeyDown}
+                            placeholder="Type your answer... (Cmd+Enter to submit)"
+                            disabled={isGenerating}
+                            className="text-base"
+                            rows={2}
+                        />
+                        <Button size="lg" onClick={() => handleClarificationResponse(planText)} disabled={!planText.trim() || isGenerating}>
+                          {isGenerating ? <Loader2 className="animate-spin" /> : <ArrowRight />}
+                        </Button>
+                    </div>
                 </div>
               ) : (
                   <div className="text-center py-10 text-muted-foreground space-y-4">
@@ -964,7 +982,3 @@ export function DashboardClient() {
     </>
   );
 }
-
-    
-
-    
