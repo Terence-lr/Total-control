@@ -158,28 +158,6 @@ export function DashboardClient() {
     }
   }, [toast]);
 
-  const handleGenerateSchedule = useCallback((plan: string) => {
-    if (!plan.trim()) {
-      toast({
-        title: "Plan is empty",
-        description: "Please enter your plan for the day.",
-        variant: "destructive",
-      });
-      return;
-    }
-    setClarificationState(null);
-    setSchedule(null);
-    setCurrentTaskIndex(-1);
-    setIsTimerStarted(false);
-    setCompletedTasksCount(0);
-    setSummary(null);
-    if (tomorrowsPlan === plan) {
-      setTomorrowsPlan(null); // Clear tomorrow's plan once it's used
-    }
-
-    callGenerateSchedule({ plan });
-  }, [toast, callGenerateSchedule, tomorrowsPlan]);
-
   const handleAddTask = useCallback(async (request: string) => {
     if (!schedule) {
       toast({
@@ -234,6 +212,28 @@ export function DashboardClient() {
       setIsUpdating(false);
     }
   }, [schedule, toast]);
+
+  const handleGenerateSchedule = useCallback((plan: string) => {
+    if (!plan.trim()) {
+      toast({
+        title: "Plan is empty",
+        description: "Please enter your plan for the day.",
+        variant: "destructive",
+      });
+      return;
+    }
+    setClarificationState(null);
+    setSchedule(null);
+    setCurrentTaskIndex(-1);
+    setIsTimerStarted(false);
+    setCompletedTasksCount(0);
+    setSummary(null);
+    if (tomorrowsPlan === plan) {
+      setTomorrowsPlan(null); // Clear tomorrow's plan once it's used
+    }
+
+    callGenerateSchedule({ plan });
+  }, [toast, callGenerateSchedule, tomorrowsPlan]);
 
   const handleClarificationResponse = useCallback((answer: string) => {
     if (!clarificationState || !answer.trim()) return;
@@ -617,8 +617,9 @@ export function DashboardClient() {
     };
 
     const isLoading = isGenerating || isUpdating;
-    const showClarification = clarificationState && clarificationState.questions.length > 0 && !isLoading;
-    const showInfoDisplay = isRecording || liveTasks.length > 0 || showClarification || isLoading;
+    const isClarifying = clarificationState && clarificationState.questions.length > 0 && !isLoading;
+    const isDisplayingTasks = liveTasks.length > 0 && !isClarifying && !isLoading;
+    const isListening = isRecording && !isDisplayingTasks && !isClarifying && !isLoading;
 
     return (
         <Dialog open={showVoiceDialog} onOpenChange={(open) => {
@@ -629,60 +630,74 @@ export function DashboardClient() {
                 <div className="flex-1 flex flex-col items-center justify-center text-center p-8 relative">
                     
                     <div className="absolute top-10 text-center w-full max-w-2xl px-4 min-h-[300px]">
-                      {showInfoDisplay && (
-                          <div className="fade-in">
-                              {isLoading ? (
-                                  <p className="text-2xl font-medium text-muted-foreground">Thinking...</p>
-                              ) : showClarification ? (
-                                  <div className="w-full max-w-lg mx-auto text-left fade-in">
-                                      <Label className="text-2xl font-semibold mb-4 block text-center">{clarificationState.questions[0]}</Label>
-                                      <div className="flex gap-2">
-                                          <Textarea
-                                              value={planText}
-                                              onChange={(e) => setPlanText(e.target.value)}
-                                              onKeyDown={handleTextInputKeyDown}
-                                              placeholder="Type your answer... (Cmd+Enter to submit)"
-                                              disabled={isLoading}
-                                              className="text-lg"
-                                              rows={2}
-                                          />
-                                          <Button size="lg" onClick={() => handleClarificationResponse(planText)} disabled={!planText.trim() || isLoading}>
-                                            {isLoading ? <Loader2 className="animate-spin" /> : <ArrowRight />}
-                                          </Button>
-                                      </div>
+                        
+                        {/* Loading State */}
+                        <div className={cn("absolute inset-0 flex items-center justify-center transition-opacity", isLoading ? "opacity-100 fade-in" : "opacity-0")}>
+                           <p className="text-2xl font-medium text-muted-foreground">Thinking...</p>
+                        </div>
+
+                        {/* Clarification State */}
+                        <div className={cn("absolute inset-0 transition-opacity", isClarifying ? "opacity-100 fade-in" : "opacity-0")}>
+                          {isClarifying && (
+                              <div className="w-full max-w-lg mx-auto text-left">
+                                  <Label className="text-2xl font-semibold mb-4 block text-center">{clarificationState.questions[0]}</Label>
+                                  <div className="flex gap-2">
+                                      <Textarea
+                                          value={planText}
+                                          onChange={(e) => setPlanText(e.target.value)}
+                                          onKeyDown={handleTextInputKeyDown}
+                                          placeholder="Type your answer... (Cmd+Enter to submit)"
+                                          disabled={isLoading}
+                                          className="text-lg"
+                                          rows={2}
+                                      />
+                                      <Button size="lg" onClick={() => handleClarificationResponse(planText)} disabled={!planText.trim() || isLoading}>
+                                        {isLoading ? <Loader2 className="animate-spin" /> : <ArrowRight />}
+                                      </Button>
                                   </div>
-                              ) : liveTasks.length > 0 ? (
-                                  <Card className="text-left bg-background/80 backdrop-blur-sm max-h-[50vh] overflow-y-auto fade-in">
-                                      <CardHeader>
-                                        <CardTitle className="flex items-center gap-2"><Mic/> Tasks I'm hearing...</CardTitle>
-                                      </CardHeader>
-                                      <CardContent className="space-y-4">
-                                        {liveTasks.map((task, index) => (
-                                          <div key={index} className="p-3 rounded-lg border bg-background/50">
-                                            <p className="font-semibold text-lg">{task.name}</p>
-                                            <div className="flex items-center gap-4 text-sm text-muted-foreground mt-1">
-                                              {task.time && <span className="flex items-center gap-1"><CalendarIcon className="w-4 h-4"/> {task.time}</span>}
-                                              {task.duration && <span className="flex items-center gap-1"><Hourglass className="w-4 h-4"/> {task.duration}</span>}
-                                              {task.status === 'needs_info' && !task.time && !task.duration && (
-                                                <span className="text-xs italic">More details needed...</span>
-                                              )}
-                                            </div>
-                                          </div>
-                                        ))}
-                                      </CardContent>
-                                    </Card>
-                              ) : (
-                                  <>
-                                      <p className="text-2xl text-muted-foreground mb-4">{transcript.interim || "Listening..."}</p>
-                                      <p className="text-4xl lg:text-5xl font-bold text-foreground">{transcript.final}</p>
-                                  </>
-                              )}
-                          </div>
-                      )}
+                              </div>
+                          )}
+                        </div>
+                        
+                        {/* Displaying Tasks State */}
+                        <div className={cn("absolute inset-0 transition-opacity", isDisplayingTasks ? "opacity-100 fade-in" : "opacity-0")}>
+                          {isDisplayingTasks && (
+                              <Card className="text-left bg-background/80 backdrop-blur-sm max-h-[50vh] overflow-y-auto">
+                                  <CardHeader>
+                                    <CardTitle className="flex items-center gap-2"><Mic/> Tasks I'm hearing...</CardTitle>
+                                  </CardHeader>
+                                  <CardContent className="space-y-4">
+                                    {liveTasks.map((task, index) => (
+                                      <div key={index} className="p-3 rounded-lg border bg-background/50">
+                                        <p className="font-semibold text-lg">{task.name}</p>
+                                        <div className="flex items-center gap-4 text-sm text-muted-foreground mt-1">
+                                          {task.time && <span className="flex items-center gap-1"><CalendarIcon className="w-4 h-4"/> {task.time}</span>}
+                                          {task.duration && <span className="flex items-center gap-1"><Hourglass className="w-4 h-4"/> {task.duration}</span>}
+                                          {task.status === 'needs_info' && !task.time && !task.duration && (
+                                            <span className="text-xs italic">More details needed...</span>
+                                          )}
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </CardContent>
+                                </Card>
+                          )}
+                        </div>
+
+                        {/* Listening State */}
+                        <div className={cn("absolute inset-0 transition-opacity", isListening ? "opacity-100 fade-in" : "opacity-0")}>
+                           {isListening && (
+                              <>
+                                  <p className="text-2xl text-muted-foreground mb-4">{transcript.interim || "Listening..."}</p>
+                                  <p className="text-4xl lg:text-5xl font-bold text-foreground">{transcript.final}</p>
+                              </>
+                           )}
+                        </div>
+
                     </div>
                     
                     <div className="flex flex-col items-center justify-center gap-6 mt-auto absolute bottom-24">
-                        {!isRecording && !isLoading && !clarificationState && (
+                        {!isRecording && !isLoading && !isClarifying && (
                             <Button 
                                 onClick={startVoiceSession} 
                                 disabled={!isAvailable} 
@@ -985,5 +1000,3 @@ export function DashboardClient() {
     </>
   );
 }
-
-    
