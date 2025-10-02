@@ -1,3 +1,4 @@
+
 {
   "entities": {
     "Task": {
@@ -310,34 +311,34 @@
         "userId"
       ]
     },
-    "User": {
+    "UserProfile": {
       "$schema": "http://json-schema.org/draft-07/schema#",
-      "title": "User",
+      "title": "User Profile",
       "type": "object",
-      "description": "Represents a user of the application.",
+      "description": "Represents a user's profile information.",
       "properties": {
-        "id": {
+        "displayName": {
           "type": "string",
-          "description": "Unique identifier for the User entity."
+          "description": "The user's display name."
         },
-        "email": {
+        "photoURL": {
           "type": "string",
-          "description": "The user's email address.",
-          "format": "email"
+          "description": "URL of the user's profile picture.",
+          "format": "uri"
         },
-        "name": {
+        "createdAt": {
           "type": "string",
-          "description": "The user's full name."
+          "format": "date-time",
+          "description": "Timestamp when the profile was created."
         },
-        "preferences": {
+        "updatedAt": {
           "type": "string",
-          "description": "JSON object for the users preferences. The object has attributes for user preferences"
+          "format": "date-time",
+          "description": "Timestamp when the profile was last updated."
         }
       },
       "required": [
-        "id",
-        "email",
-        "name"
+        "displayName"
       ]
     }
   },
@@ -352,9 +353,9 @@
       {
         "path": "users/{userId}",
         "definition": {
-          "entityName": "User",
+          "entityName": "UserProfile",
           "schema": {
-            "$ref": "#/entities/User"
+            "$ref": "#/entities/UserProfile"
           },
           "description": "Stores user profile information."
         }
