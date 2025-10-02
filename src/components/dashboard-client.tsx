@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from "react";
@@ -285,7 +286,7 @@ export function DashboardClient() {
     setTranscript,
   } = useSpeechRecognition({
       onTranscriptFinal: handleFinalTranscript,
-      isParentGenerating: isParentGenerating,
+      isParentGenerating,
   });
 
   const debouncedParseTranscript = useDebouncedCallback(async (text: string) => {
@@ -963,5 +964,7 @@ export function DashboardClient() {
     </>
   );
 }
+
+    
 
     
