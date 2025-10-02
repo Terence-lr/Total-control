@@ -107,6 +107,103 @@ export function DashboardClient() {
     conversation: Conversation[];
     originalPlan: string;
   } | null>(null);
+
+  const isParentGenerating = isGenerating;
+  
+  const callGenerateSchedule = useCallback(async (input: GenerateScheduleInput) => {
+    setIsGenerating(true);
+    setTranscript({ interim: '', final: '' });
+
+    try {
+        const result = await generateSchedule(input);
+
+        if (result.needs_clarification && result.clarifying_questions.length > 0) {
+            setClarificationState(prev => ({
+                questions: result.clarifying_questions,
+                conversation: prev?.conversation || [],
+                originalPlan: input.plan,
+            }));
+            setSchedule(null);
+        } else if (result.schedule && result.schedule.length > 0) {
+            const initialSchedule = result.schedule;
+            setSchedule(initialSchedule);
+            setCurrentTaskIndex(0); 
+            setClarificationState(null);
+            setShowVoiceDialog(false);
+            setIsTimerStarted(true);
+        } else {
+            toast({
+                title: "Empty Schedule",
+                description: "Could not generate a schedule from your plan. Try being more specific.",
+                variant: "destructive"
+            });
+            setClarificationState(null);
+        }
+    } catch (error) {
+        console.error("Error generating schedule:", error);
+        toast({
+            title: "Error",
+            description: "Failed to generate schedule. Please try again.",
+            variant: "destructive",
+        });
+        setClarificationState(null);
+    } finally {
+        setIsGenerating(false);
+    }
+  }, [toast]);
+  
+  const handleGenerateSchedule = useCallback((plan: string) => {
+    if (!plan.trim()) {
+      toast({
+        title: "Plan is empty",
+        description: "Please enter your plan for the day.",
+        variant: "destructive",
+      });
+      return;
+    }
+    setClarificationState(null);
+    setSchedule(null);
+    setCurrentTaskIndex(-1);
+    setIsTimerStarted(false);
+    setCompletedTasksCount(0);
+    setSummary(null);
+    if (tomorrowsPlan === plan) {
+      setTomorrowsPlan(null); // Clear tomorrow's plan once it's used
+    }
+
+    callGenerateSchedule({ plan });
+  }, [toast, callGenerateSchedule, tomorrowsPlan]);
+  
+  const handleClarificationResponse = useCallback((answer: string) => {
+    if (!clarificationState || !answer.trim()) return;
+
+    const currentQuestion = clarificationState.questions[0];
+    const updatedConversation: Conversation[] = [
+        ...clarificationState.conversation,
+        { question: currentQuestion, answer: answer },
+    ];
+    
+    // Optimistically remove the answered question
+    const remainingQuestions = clarificationState.questions.slice(1);
+
+    setClarificationState(prev => {
+        if (!prev) return null;
+        return {
+            ...prev,
+            conversation: updatedConversation,
+            questions: remainingQuestions,
+        }
+    });
+    
+    setPlanText(''); // Clear the input after submitting answer
+    
+    if (remainingQuestions.length === 0) {
+        callGenerateSchedule({
+            plan: clarificationState.originalPlan,
+            conversationHistory: updatedConversation,
+        });
+    }
+  }, [clarificationState, callGenerateSchedule]);
   
   const handleFinalTranscript = useCallback((text: string) => {
     if (clarificationState) {
@@ -114,7 +211,7 @@ export function DashboardClient() {
     } else {
         handleGenerateSchedule(text);
     }
-  }, [clarificationState]);
+  }, [clarificationState, handleGenerateSchedule, handleClarificationResponse]);
 
   const {
     isRecording,
@@ -128,7 +225,7 @@ export function DashboardClient() {
     setTranscript,
   } = useSpeechRecognition({
       onTranscriptFinal: handleFinalTranscript,
-      isParentGenerating: isGenerating,
+      isParentGenerating,
   });
   
   const scheduleIsComplete = schedule && schedule.length > 0 && currentTaskIndex === -1 && completedTasksCount === schedule.length;
@@ -203,103 +300,6 @@ export function DashboardClient() {
     const timeInterval = setInterval(fetchTime, 60000); // Update every minute
     return () => clearInterval(timeInterval);
   }, []);
-
-  
-  const callGenerateSchedule = useCallback(async (input: GenerateScheduleInput) => {
-    setIsGenerating(true);
-    setTranscript({ interim: '', final: '' });
-
-    try {
-        const result = await generateSchedule(input);
-
-        if (result.needs_clarification && result.clarifying_questions.length > 0) {
-            setClarificationState(prev => ({
-                questions: result.clarifying_questions,
-                conversation: prev?.conversation || [],
-                originalPlan: input.plan,
-            }));
-            setSchedule(null);
-        } else if (result.schedule && result.schedule.length > 0) {
-            const initialSchedule = result.schedule;
-            setSchedule(initialSchedule);
-            setCurrentTaskIndex(0); 
-            setClarificationState(null);
-            setShowVoiceDialog(false);
-            setIsTimerStarted(true);
-        } else {
-            toast({
-                title: "Empty Schedule",
-                description: "Could not generate a schedule from your plan. Try being more specific.",
-                variant: "destructive"
-            });
-            setClarificationState(null);
-        }
-    } catch (error) {
-        console.error("Error generating schedule:", error);
-        toast({
-            title: "Error",
-            description: "Failed to generate schedule. Please try again.",
-            variant: "destructive",
-        });
-        setClarificationState(null);
-    } finally {
-        setIsGenerating(false);
-    }
-  }, [setTranscript, toast]);
-
-  const handleGenerateSchedule = useCallback((plan: string) => {
-    if (!plan.trim()) {
-      toast({
-        title: "Plan is empty",
-        description: "Please enter your plan for the day.",
-        variant: "destructive",
-      });
-      return;
-    }
-    setClarificationState(null);
-    setSchedule(null);
-    setCurrentTaskIndex(-1);
-    setIsTimerStarted(false);
-    setCompletedTasksCount(0);
-    setSummary(null);
-    if (tomorrowsPlan === plan) {
-      setTomorrowsPlan(null); // Clear tomorrow's plan once it's used
-    }
-
-    callGenerateSchedule({ plan });
-  }, [toast, callGenerateSchedule, tomorrowsPlan]);
-  
-  const handleClarificationResponse = useCallback((answer: string) => {
-    if (!clarificationState || !answer.trim()) return;
-
-    const currentQuestion = clarificationState.questions[0];
-    const updatedConversation: Conversation[] = [
-        ...clarificationState.conversation,
-        { question: currentQuestion, answer: answer },
-    ];
-    
-    // Optimistically remove the answered question
-    const remainingQuestions = clarificationState.questions.slice(1);
-
-    setClarificationState(prev => {
-        if (!prev) return null;
-        return {
-            ...prev,
-            conversation: updatedConversation,
-            questions: remainingQuestions,
-        }
-    });
-    
-    setPlanText(''); // Clear the input after submitting answer
-    
-    if (remainingQuestions.length === 0) {
-        callGenerateSchedule({
-            plan: clarificationState.originalPlan,
-            conversationHistory: updatedConversation,
-        });
-    }
-  }, [clarificationState, callGenerateSchedule]);
-
 
   const handleAddTask = async (newTask: string) => {
     if (!schedule) {
@@ -717,7 +717,7 @@ export function DashboardClient() {
         {schedule && !scheduleIsComplete && currentTaskIndex !== -1 && (
           <Card>
             <CardHeader>
-              <CardTitle>Focus Mode</CardTitle>
+              <CardTitle>Now Playing</CardTitle>
               <CardContent className="flex justify-center items-center pt-6">
                  {!isTimerStarted ? (
                     <Button size="lg" className="w-full h-14 text-lg" onClick={() => router.push(`/dashboard/focus?taskIndex=${currentTaskIndex}`)} disabled={isTimerActive}>
