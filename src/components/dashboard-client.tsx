@@ -3,9 +3,9 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
-import { Mic, Plus, Clock, Calendar as CalendarIcon, Zap, Pause, Play, Check, X, Loader2, Award, BrainCircuit, Bot, Sparkles, Book, Lightbulb, ArrowRight, NotebookText, FileInput, Square, PlayCircle } from "lucide-react";
+import { Mic, Plus, Clock, Calendar as CalendarIcon, Zap, Pause, Play, Check, X, Loader2, Award, BrainCircuit, Bot, Sparkles, Book, Lightbulb, ArrowRight, NotebookText, FileInput, Square, PlayCircle, StopCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardFooter, CardDescription } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -14,6 +14,7 @@ import {
   DialogDescription,
   DialogFooter,
   DialogClose,
+  DialogTrigger,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -25,7 +26,6 @@ import { getCurrentTime, GetCurrentTimeOutput } from "@/ai/flows/get-current-tim
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { z } from "zod";
-import { DialogTrigger } from "@radix-ui/react-dialog";
 import {
   Accordion,
   AccordionContent,
@@ -98,6 +98,7 @@ export function DashboardClient() {
   const [currentTime, setCurrentTime] = useState<GetCurrentTimeOutput | null>(null);
   const [isMounted, setIsMounted] = useState(false);
   const [tomorrowsPlan, setTomorrowsPlan] = useState<string | null>(null);
+  const [showVoiceDialog, setShowVoiceDialog] = useState(false);
   
   const [clarificationState, setClarificationState] = useState<{
     questions: string[];
@@ -106,7 +107,7 @@ export function DashboardClient() {
   } | null>(null);
   
   const handleFinalTranscript = useCallback((text: string) => {
-    setTranscript({ interim: '', final: text }); // Update parent state
+    // This function will now be called by stopRecognition, not automatically.
     if (clarificationState) {
         handleClarificationResponse(text);
     } else {
@@ -127,7 +128,6 @@ export function DashboardClient() {
     setTranscript,
   } = useSpeechRecognition({
       onTranscriptFinal: handleFinalTranscript,
-      isGenerating: isGenerating,
   });
   
   const processingOrGenerating = isProcessing || isGenerating;
@@ -205,7 +205,7 @@ export function DashboardClient() {
   
   const callGenerateSchedule = useCallback(async (input: GenerateScheduleInput) => {
     setIsGenerating(true);
-    setTranscript({ interim: '', final: '' }); // Clear transcript
+    setTranscript({ interim: '', final: '' });
 
     try {
         const result = await generateSchedule(input);
@@ -222,6 +222,7 @@ export function DashboardClient() {
             setSchedule(initialSchedule);
             setCurrentTaskIndex(0); 
             setClarificationState(null);
+            setShowVoiceDialog(false);
             router.push(`/dashboard/focus?taskIndex=0`);
         } else {
             toast({
@@ -258,10 +259,12 @@ export function DashboardClient() {
     setCurrentTaskIndex(-1);
     setCompletedTasksCount(0);
     setSummary(null);
-    setTomorrowsPlan(null); // Clear tomorrow's plan once it's used
+    if (tomorrowsPlan === plan) {
+      setTomorrowsPlan(null); // Clear tomorrow's plan once it's used
+    }
 
     callGenerateSchedule({ plan });
-  }, [toast, callGenerateSchedule]);
+  }, [toast, callGenerateSchedule, tomorrowsPlan]);
   
   const handleClarificationResponse = useCallback((answer: string) => {
     if (!clarificationState || !answer.trim()) return;
@@ -550,6 +553,86 @@ export function DashboardClient() {
       );
   }
 
+  const VoiceInputDialog = () => {
+    const handleStop = () => {
+        stopRecognition();
+    };
+
+    const handleCancel = () => {
+        cancelRecognition();
+        setShowVoiceDialog(false);
+    };
+
+    return (
+        <Dialog open={showVoiceDialog} onOpenChange={(open) => {
+            if (!open) { handleCancel(); }
+            else { setShowVoiceDialog(true); }
+        }}>
+            <DialogContent className="max-w-4xl h-[80vh] flex flex-col p-0">
+                <div className="flex-1 flex flex-col items-center justify-center text-center p-8 bg-background relative">
+                    
+                    {isRecording ? (
+                        <>
+                            <p className="text-2xl text-muted-foreground mb-4">{transcript.interim || "Listening..."}</p>
+                            <p className="text-4xl lg:text-6xl font-bold text-foreground fade-in">{transcript.final}</p>
+                        </>
+                    ) : processingOrGenerating ? (
+                       <div className="flex flex-col items-center gap-4">
+                           <Loader2 className="h-16 w-16 animate-spin text-accent" />
+                           <p className="text-2xl font-medium text-muted-foreground">Thinking...</p>
+                       </div>
+                    ) : clarificationState && clarificationState.questions.length > 0 ? (
+                        <div className="w-full max-w-lg mx-auto text-left fade-in">
+                            <Label className="text-2xl font-semibold mb-4 block">{clarificationState.questions[0]}</Label>
+                            <div className="flex gap-2">
+                                <Textarea
+                                    value={planText}
+                                    onChange={(e) => setPlanText(e.target.value)}
+                                    onKeyDown={handleTextInputKeyDown}
+                                    placeholder="Type your answer... (Cmd+Enter to submit)"
+                                    disabled={processingOrGenerating}
+                                    className="text-lg"
+                                    rows={2}
+                                />
+                                 <Button size="lg" onClick={() => handleClarificationResponse(planText)} disabled={!planText.trim() || processingOrGenerating}>
+                                   {processingOrGenerating ? <Loader2 className="animate-spin" /> : <ArrowRight />}
+                                 </Button>
+                             </div>
+                        </div>
+                    ) : (
+                        <p className="text-2xl font-medium text-muted-foreground">Tap the mic to start speaking</p>
+                    )}
+                    
+                </div>
+                 <DialogFooter className="bg-secondary/30 border-t p-6 flex flex-col items-center justify-center gap-4 h-64">
+                    {!isRecording && !processingOrGenerating && (
+                        <Button 
+                            onClick={startRecognition} 
+                            disabled={!isAvailable} 
+                            className="h-32 w-32 rounded-full bg-accent hover:bg-accent/90 text-accent-foreground shadow-lg"
+                        >
+                            <Mic className="h-16 w-16" />
+                        </Button>
+                    )}
+                    {isRecording && (
+                        <>
+                            <div className="text-2xl font-mono text-foreground mb-2">{formatTime(recordingTime)}</div>
+                             <Button 
+                                onClick={handleStop}
+                                className="h-20 w-48 rounded-full bg-accent hover:bg-accent/90 text-accent-foreground text-xl font-bold shadow-lg pulse-red"
+                            >
+                               <StopCircle className="mr-3 h-8 w-8" /> Done
+                            </Button>
+                            <Button variant="ghost" onClick={handleCancel}>Cancel</Button>
+                        </>
+                    )}
+                    {error && <p className="text-sm text-destructive absolute bottom-2 left-4">{error}</p>}
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
+  };
+
 
   return (
     <>
@@ -591,6 +674,8 @@ export function DashboardClient() {
         </DialogFooter>
       </DialogContent>
     </Dialog>
+
+    <VoiceInputDialog />
 
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
       <div className="lg:col-span-2 space-y-6">
@@ -641,6 +726,21 @@ export function DashboardClient() {
             </CardHeader>
           </Card>
         )}
+        
+        {!schedule && !isGenerating && (
+             <Card className="min-h-[200px]">
+                <CardHeader>
+                    <CardTitle className="text-2xl">Plan Your Day</CardTitle>
+                    <CardDescription>Tell the AI assistant what you need to do, and it will create a schedule for you.</CardDescription>
+                </CardHeader>
+                <CardContent className="flex flex-col items-center justify-center gap-4">
+                    <Button onClick={() => setShowVoiceDialog(true)} className="h-24 w-24 rounded-full bg-accent hover:bg-accent/90 text-accent-foreground shadow-lg">
+                        <Mic className="h-12 w-12" />
+                    </Button>
+                    <p className="text-muted-foreground text-sm">Tap to speak your plan</p>
+                </CardContent>
+             </Card>
+        )}
 
         <Card>
           <CardHeader>
@@ -687,8 +787,11 @@ export function DashboardClient() {
                 </ul>
               </div>
             ) : (
-                <div className="text-center py-10 text-muted-foreground">
+                <div className="text-center py-10 text-muted-foreground space-y-4">
                     <p>What's on your plate today? Let the AI build your schedule.</p>
+                     <Button variant="link" onClick={() => handleGenerateSchedule("I have a dentist appointment at 2pm, need to work out for 30 minutes, study for 2 hours, and want to be in bed by 10pm")}>
+                        Try an example
+                    </Button>
                 </div>
             )}
           </CardContent>
@@ -697,91 +800,29 @@ export function DashboardClient() {
 
       <div className="space-y-6">
         <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-                <Bot /> AI Assistant
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-             {clarificationState && clarificationState.questions.length > 0 ? (
-                <div className="space-y-3 fade-in">
-                    <Label className="font-semibold">{clarificationState.questions[0]}</Label>
-                     <div className="flex gap-2">
-                        <Textarea
-                            value={planText}
-                            onChange={(e) => setPlanText(e.target.value)}
-                            onKeyDown={handleTextInputKeyDown}
-                            placeholder="Type your answer... (Cmd+Enter to submit)"
-                            disabled={processingOrGenerating}
-                            className="text-base"
-                            rows={2}
-                        />
-                         <Button onClick={() => handleClarificationResponse(planText)} disabled={!planText.trim() || processingOrGenerating}>
-                           {processingOrGenerating ? <Loader2 className="animate-spin" /> : <ArrowRight />}
-                         </Button>
-                     </div>
-                </div>
-             ) : (
-                <div className="relative">
-                    <Textarea
-                        value={transcript.final || transcript.interim || planText}
-                        onChange={(e) => { setPlanText(e.target.value); setTranscript({ final: '', interim: '' }); }}
-                        onKeyDown={handleTextInputKeyDown}
-                        placeholder={isRecording ? "Recording..." : (processingOrGenerating ? "Thinking..." : "What's on your plate today? (Cmd+Enter to submit)")}
-                        disabled={isRecording || processingOrGenerating}
-                        className="text-base pr-12"
-                        rows={3}
-                    />
-                    <div className="absolute bottom-2 right-2 flex items-center gap-2">
-                        {isRecording ? (
-                            <Button size="icon" variant="destructive" onClick={stopRecognition} className="animate-pulse-ring">
-                                <Square />
-                            </Button>
-                        ) : (
-                            <Button
-                                size="icon"
-                                variant="default"
-                                onClick={startRecognition}
-                                disabled={!isAvailable || processingOrGenerating}
-                                className={cn("bg-accent hover:bg-accent/90 text-accent-foreground")}
-                            >
-                                <Mic />
-                            </Button>
-                        )}
-                    </div>
-                </div>
-             )}
-             
-            {isRecording && (
-                <div className="flex justify-between items-center text-sm text-muted-foreground">
-                    <span>Recording... {formatTime(recordingTime)}</span>
-                        <Button variant="ghost" size="sm" onClick={cancelRecognition}>Cancel</Button>
-                </div>
-            )}
-            {error && <p className="text-sm text-destructive">{error}</p>}
-
-
-             {!schedule && !isGenerating && !clarificationState && tomorrowsPlan && (
-                <Button variant="outline" className="w-full" onClick={() => handleGenerateSchedule(tomorrowsPlan)}>
-                    <Sparkles className="mr-2 h-4 w-4"/> Start with tomorrow's plan
-                </Button>
-             )}
-
-             {!schedule && !isGenerating && !clarificationState && (
-                <div className="text-center pt-2">
-                    <Button variant="link" onClick={() => handleGenerateSchedule("I have a dentist appointment at 2pm, need to work out for 30 minutes, study for 2 hours, and want to be in bed by 10pm")}>
-                        Try an example
+            <CardHeader>
+                <CardTitle>Or type your plan...</CardTitle>
+            </CardHeader>
+            <CardContent>
+                 <Textarea
+                    value={planText}
+                    onChange={(e) => setPlanText(e.target.value)}
+                    onKeyDown={handleTextInputKeyDown}
+                    placeholder="e.g. I have a dentist appointment at 2pm..."
+                    className="text-base"
+                    rows={4}
+                />
+                 <Button className="mt-4 w-full" onClick={() => handleGenerateSchedule(planText)} disabled={!planText.trim() || isGenerating}>
+                    {isGenerating ? <><Loader2 className="mr-2 h-4 w-4 animate-spin"/> Generating...</> : "Generate Schedule"}
+                 </Button>
+                 {tomorrowsPlan && (
+                    <Button variant="outline" className="w-full mt-2" onClick={() => handleGenerateSchedule(tomorrowsPlan)}>
+                        <Sparkles className="mr-2 h-4 w-4"/> Start with yesterday's plan
                     </Button>
-                </div>
-             )}
-             { (isGenerating || isProcessing) && (
-                <div className="flex items-center justify-center text-sm text-muted-foreground">
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin"/> Thinking...
-                </div>
-             )}
-          </CardContent>
+                )}
+            </CardContent>
         </Card>
-
+        
         <Card>
             <CardHeader>
                 <CardTitle className="flex items-center gap-2">

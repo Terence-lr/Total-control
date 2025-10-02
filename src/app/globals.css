@@ -106,10 +106,12 @@
 
   @keyframes pulse-ring-animation {
     0%, 100% {
-      opacity: 1;
+      transform: scale(1);
+      box-shadow: 0 0 0 0 hsl(var(--accent-crimson) / 0.7);
     }
     50% {
-      opacity: 0.5;
+      transform: scale(1.05);
+      box-shadow: 0 0 0 10px hsl(var(--accent-crimson) / 0);
     }
   }
 
