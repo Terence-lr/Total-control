@@ -1,4 +1,5 @@
-"use client";
+
+'use client';
 
 import { useState, useEffect, useMemo } from "react";
 import {
@@ -7,9 +8,8 @@ import {
   CardTitle,
   CardContent,
   CardDescription,
-  CardFooter,
 } from "@/components/ui/card";
-import { CheckSquare, Plus, Loader2, Calendar, Clock, Search, Workflow, Target } from "lucide-react";
+import { CheckSquare, Plus, Loader2, Calendar, Clock, Search, Workflow, Target, Mic } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -17,12 +17,14 @@ import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { useFirebase, useUser, useMemoFirebase } from "@/firebase";
-import { collection, query, orderBy } from "firebase/firestore";
+import { collection, query, orderBy, serverTimestamp } from "firebase/firestore";
 import { useCollection, WithId } from "@/firebase/firestore/use-collection";
 import { format, isToday, isFuture, parseISO } from 'date-fns';
+import { AddTaskDialog } from "@/components/add-task-dialog";
+import { toggleTaskCompletion } from "@/firebase/firestore/mutations";
 
 // Matches the Task entity in backend.json
-type Task = {
+export type Task = {
     name: string;
     duration_minutes?: number;
     scheduled_time?: string;
@@ -41,6 +43,23 @@ type Task = {
 
 
 const TaskCard = ({ task }: { task: WithId<Task> }) => {
+    const { firestore } = useFirebase();
+    const { toast } = useToast();
+
+    const handleToggleCompletion = async () => {
+        if (!firestore) return;
+        try {
+            await toggleTaskCompletion(firestore, task.userId, task.id, !task.completed);
+        } catch (error) {
+            console.error("Error toggling task completion:", error);
+            toast({
+                title: "Error",
+                description: "Could not update task status.",
+                variant: "destructive",
+            });
+        }
+    };
+
     const cardBorderColor = () => {
         // TODO: Add logic for high priority or overdue
         if (task.type === "routine_task") return "border-l-gray-500";
@@ -54,7 +73,7 @@ const TaskCard = ({ task }: { task: WithId<Task> }) => {
                     <Checkbox
                         id={`task-${task.id}`}
                         checked={task.completed}
-                        // onCheckedChange={() => toggleTaskCompletion(task.id)}
+                        onCheckedChange={handleToggleCompletion}
                         className="mt-1"
                         aria-label={`Mark task "${task.name}" as ${task.completed ? "incomplete" : "complete"}`}
                     />
@@ -75,10 +94,10 @@ const TaskCard = ({ task }: { task: WithId<Task> }) => {
                                     {task.duration_minutes} min
                                 </span>
                             )}
-                            {task.scheduled_time && (
+                            {task.date && task.scheduled_time && (
                                 <span className="flex items-center gap-1.5">
                                     <Calendar className="h-4 w-4" />
-                                    {task.scheduled_time}
+                                    {format(parseISO(task.date), 'MMM d')} at {task.scheduled_time}
                                 </span>
                             )}
                         </div>
@@ -101,6 +120,7 @@ export function TasksClient() {
     const { user, isUserLoading } = useUser();
     const { firestore } = useFirebase();
     const { toast } = useToast();
+    const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
 
     const tasksQuery = useMemoFirebase(() => {
         if (!user || !firestore) return null;
@@ -117,11 +137,16 @@ export function TasksClient() {
         
         tasks.forEach(task => {
             if (task.date) {
-                const taskDate = parseISO(task.date);
-                if (isToday(taskDate)) {
+                try {
+                    const taskDate = parseISO(task.date);
+                    if (isToday(taskDate)) {
+                        today.push(task);
+                    } else if (isFuture(taskDate)) {
+                        upcoming.push(task);
+                    }
+                } catch(e) {
+                    // tasks without a valid date are considered for today
                     today.push(task);
-                } else if (isFuture(taskDate)) {
-                    upcoming.push(task);
                 }
             } else {
                 // Assume tasks without a date are for today for now
@@ -156,63 +181,72 @@ export function TasksClient() {
             )}
         </div>
     );
-    
 
     return (
-        <div className="space-y-6">
-            <Card>
-                <CardHeader className="flex flex-row items-center justify-between">
-                    <div>
-                        <CardTitle className="flex items-center gap-2 text-2xl">
-                            <CheckSquare className="h-6 w-6" />
-                            Tasks
-                        </CardTitle>
-                        <CardDescription className="mt-2">
-                            Manage your individual actions here. Add, view, and complete your tasks.
-                        </CardDescription>
-                    </div>
-                    <div className="flex gap-2">
-                        <Button variant="outline" size="icon">
-                            <Plus className="h-5 w-5" />
-                            <span className="sr-only">Add Task</span>
-                        </Button>
-                    </div>
-                </CardHeader>
-            </Card>
+        <>
+            <AddTaskDialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen} />
+            <div className="space-y-6">
+                <Card>
+                    <CardHeader className="flex flex-row items-center justify-between">
+                        <div>
+                            <CardTitle className="flex items-center gap-2 text-2xl">
+                                <CheckSquare className="h-6 w-6" />
+                                Tasks
+                            </CardTitle>
+                            <CardDescription className="mt-2">
+                                Manage your individual actions here. Add, view, and complete your tasks.
+                            </CardDescription>
+                        </div>
+                        <div className="flex gap-2">
+                             <Button variant="outline" size="icon">
+                                <Mic className="h-5 w-5" />
+                                <span className="sr-only">Add Task with Voice</span>
+                            </Button>
+                            <Button variant="outline" size="icon" onClick={() => setIsAddDialogOpen(true)}>
+                                <Plus className="h-5 w-5" />
+                                <span className="sr-only">Add Task</span>
+                            </Button>
+                        </div>
+                    </CardHeader>
+                </Card>
 
-            <Card>
-                <CardContent className="p-4 flex flex-col md:flex-row gap-4">
-                   <div className="flex items-center gap-2">
-                        <Button variant="outline" size="sm">Today</Button>
-                        <Button variant="ghost" size="sm">Week</Button>
-                        <Button variant="ghost" size="sm">All</Button>
-                   </div>
-                   <div className="flex-1 relative">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                        <Input placeholder="Search tasks..." className="pl-9"/>
-                   </div>
-                   <div className="flex items-center gap-2">
-                        {/* Sort dropdown will go here */}
-                   </div>
-                </CardContent>
-            </Card>
+                <Card>
+                    <CardContent className="p-4 flex flex-col md:flex-row gap-4">
+                       <div className="flex items-center gap-2">
+                            <Button variant="outline" size="sm">Today</Button>
+                            <Button variant="ghost" size="sm">Week</Button>
+                            <Button variant="ghost" size="sm">All</Button>
+                       </div>
+                       <div className="flex-1 relative">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                            <Input placeholder="Search tasks..." className="pl-9"/>
+                       </div>
+                       <div className="flex items-center gap-2">
+                            {/* Sort dropdown will go here */}
+                       </div>
+                    </CardContent>
+                </Card>
 
-            {isLoading ? (
-                <div className="flex items-center justify-center h-60">
-                    <Loader2 className="h-8 w-8 animate-spin text-accent" />
-                </div>
-            ) : tasks && tasks.length > 0 ? (
-                <div className="space-y-8">
-                    <TaskList title="Today" tasks={todayTasks} date={format(new Date(), 'MMMM d')} />
-                    {upcomingTasks.length > 0 && <TaskList title="Upcoming" tasks={upcomingTasks} />}
-                </div>
-            ) : (
-                 <div className="text-center py-16 text-muted-foreground space-y-4 rounded-lg border-2 border-dashed">
-                    <CheckSquare className="h-12 w-12 mx-auto" />
-                    <h3 className="font-medium text-lg">No tasks yet.</h3>
-                    <p className="text-sm">Tap '+' or the voice button to add your first task.</p>
-                </div>
-            )}
-        </div>
+                {isLoading ? (
+                    <div className="flex items-center justify-center h-60">
+                        <Loader2 className="h-8 w-8 animate-spin text-accent" />
+                    </div>
+                ) : tasks ? (
+                    tasks.length > 0 ? (
+                        <div className="space-y-8">
+                            <TaskList title="Today" tasks={todayTasks} date={format(new Date(), 'MMMM d')} />
+                            {upcomingTasks.length > 0 && <TaskList title="Upcoming" tasks={upcomingTasks} />}
+                        </div>
+                    ) : (
+                        <div className="text-center py-16 text-muted-foreground space-y-4 rounded-lg border-2 border-dashed">
+                            <CheckSquare className="h-12 w-12 mx-auto" />
+                            <h3 className="font-medium text-lg">No tasks yet.</h3>
+                            <p className="text-sm">Tap '+' or the voice button to add your first task.</p>
+                        </div>
+                    )
+                ) : null}
+            </div>
+        </>
     );
 }
+
