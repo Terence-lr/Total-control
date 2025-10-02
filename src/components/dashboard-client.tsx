@@ -639,244 +639,240 @@ export function DashboardClient() {
 
   return (
     <>
-    <Dialog open={showSummaryDialog} onOpenChange={setShowSummaryDialog}>
-      <DialogContent className="sm:max-w-lg">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2"><Sparkles className="text-accent"/> Your Daily Summary</DialogTitle>
-          <DialogDescription>
-            Here is a summary of your day based on your completed tasks.
-          </DialogDescription>
-        </DialogHeader>
-        <div className="py-4 text-sm text-foreground">
-          {isSummarizing ? (
-             <div className="flex items-center justify-center h-40">
-                <Loader2 className="h-8 w-8 animate-spin text-accent" />
-             </div>
-          ) : summary ? (
-            <Accordion type="multiple" defaultValue={['Key Accomplishments', 'Suggestions for Tomorrow']} className="w-full">
-                {summary.accomplishments && summary.accomplishments.length > 0 && (
-                    <SummarySection title="Key Accomplishments" items={summary.accomplishments} icon={Award} />
-                )}
-                {summary.learnings && summary.learnings.length > 0 && (
-                    <SummarySection title="Learnings & Insights" items={summary.learnings} icon={Lightbulb} />
-                )}
-                {summary.suggestions && summary.suggestions.length > 0 && (
-                    <SummarySection title="Suggestions for Tomorrow" items={summary.suggestions} icon={NotebookText} />
-                )}
-            </Accordion>
-          ) : (
-             <div className="flex items-center justify-center text-muted-foreground h-40">
-                No summary available.
-             </div>
+      <Dialog open={showSummaryDialog} onOpenChange={setShowSummaryDialog}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><Sparkles className="text-accent"/> Your Daily Summary</DialogTitle>
+            <DialogDescription>
+              Here is a summary of your day based on your completed tasks.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4 text-sm text-foreground">
+            {isSummarizing ? (
+              <div className="flex items-center justify-center h-40">
+                  <Loader2 className="h-8 w-8 animate-spin text-accent" />
+              </div>
+            ) : summary ? (
+              <Accordion type="multiple" defaultValue={['Key Accomplishments', 'Suggestions for Tomorrow']} className="w-full">
+                  {summary.accomplishments && summary.accomplishments.length > 0 && (
+                      <SummarySection title="Key Accomplishments" items={summary.accomplishments} icon={Award} />
+                  )}
+                  {summary.learnings && summary.learnings.length > 0 && (
+                      <SummarySection title="Learnings & Insights" items={summary.learnings} icon={Lightbulb} />
+                  )}
+                  {summary.suggestions && summary.suggestions.length > 0 && (
+                      <SummarySection title="Suggestions for Tomorrow" items={summary.suggestions} icon={NotebookText} />
+                  )}
+              </Accordion>
+            ) : (
+              <div className="flex items-center justify-center text-muted-foreground h-40">
+                  No summary available.
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button type="button">Close</Button>
+            </DialogClose>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <VoiceInputDialog />
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-2 space-y-6">
+
+          {scheduleIsComplete && (
+              <Card>
+                  <CardHeader>
+                      <CardTitle className="flex items-center gap-3 text-2xl">
+                          <Award /> Well done!
+                      </CardTitle>
+                      <p className="text-muted-foreground pt-2">You've completed all your tasks for the day. Take a moment to reflect on your accomplishments.</p>
+                  </CardHeader>
+                  <CardFooter>
+                      <QuickCaptureDialog
+                          trigger={
+                              <Button variant="default" className="w-full">
+                                  <Book className="mr-2 h-5 w-5" /> Reflect & Summarize Day
+                              </Button>
+                          }
+                          title="Reflect & Summarize"
+                          description="Add any final thoughts, accomplishments, or learnings from your day. The AI will generate a concise summary."
+                          inputLabel="Your Thoughts"
+                          confirmText={isSummarizing ? "Summarizing..." : "Generate Summary"}
+                          isLoading={isSummarizing}
+                          multiline={true}
+                          onConfirm={(thoughts) => {
+                              const completedTasks = schedule?.map(t => t.task).join(', ');
+                              const fullContext = `Completed tasks: ${completedTasks}. Additional thoughts: ${thoughts}`;
+                              handleSummarizeDay(fullContext);
+                          }}
+                      />
+                  </CardFooter>
+              </Card>
           )}
-        </div>
-        <DialogFooter>
-          <DialogClose asChild>
-            <Button type="button">Close</Button>
-          </DialogClose>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-
-    <VoiceInputDialog />
-
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-      <div className="lg:col-span-2 space-y-6">
-
-        {scheduleIsComplete && (
+          
+          {schedule && !scheduleIsComplete && currentTaskIndex !== -1 && (
             <Card>
-                 <CardHeader>
-                    <CardTitle className="flex items-center gap-3 text-2xl">
-                        <Award /> Well done!
-                    </CardTitle>
-                    <p className="text-muted-foreground pt-2">You've completed all your tasks for the day. Take a moment to reflect on your accomplishments.</p>
-                 </CardHeader>
-                 <CardFooter>
-                    <QuickCaptureDialog
-                        trigger={
-                            <Button variant="default" className="w-full">
-                                <Book className="mr-2 h-5 w-5" /> Reflect & Summarize Day
-                            </Button>
-                        }
-                        title="Reflect & Summarize"
-                        description="Add any final thoughts, accomplishments, or learnings from your day. The AI will generate a concise summary."
-                        inputLabel="Your Thoughts"
-                        confirmText={isSummarizing ? "Summarizing..." : "Generate Summary"}
-                        isLoading={isSummarizing}
-                        multiline={true}
-                        onConfirm={(thoughts) => {
-                            const completedTasks = schedule?.map(t => t.task).join(', ');
-                            const fullContext = `Completed tasks: ${completedTasks}. Additional thoughts: ${thoughts}`;
-                            handleSummarizeDay(fullContext);
-                        }}
-                    />
-                 </CardFooter>
+              <CardHeader>
+                <CardTitle>Now Playing</CardTitle>
+              </CardHeader>
+              <CardContent className="flex justify-center items-center pt-6">
+                  {!isTimerStarted ? (
+                      <Button size="lg" className="w-full h-14 text-lg" onClick={() => router.push(`/dashboard/focus?taskIndex=${currentTaskIndex}`)} disabled={isTimerActive}>
+                          <Play className="mr-2 h-6 w-6" /> Start Day
+                      </Button>
+                  ) : (
+                      <Button asChild variant="default" size="lg">
+                          <Link href={`/dashboard/focus?taskIndex=${currentTaskIndex}`}>
+                              <PlayCircle className="mr-2 h-5 w-5" />
+                              {currentTaskIndex > 0 ? "Resume Day" : "Start Day"}
+                          </Link>
+                      </Button>
+                  )}
+              </CardContent>
             </Card>
-        )}
-        
-        {schedule && !scheduleIsComplete && currentTaskIndex !== -1 && (
+          )}
+          
+          {!schedule && !isGenerating && (
+              <Card className="min-h-[200px]">
+                  <CardHeader>
+                      <CardTitle className="text-2xl">Plan Your Day</CardTitle>
+                      <CardDescription>Tell the AI assistant what you need to do, and it will create a schedule for you.</CardDescription>
+                  </CardHeader>
+                  <CardContent className="flex flex-col items-center justify-center gap-4">
+                      <Button onClick={() => setShowVoiceDialog(true)} className="h-24 w-24 rounded-full bg-accent hover:bg-accent/90 text-accent-foreground shadow-lg">
+                          <Mic className="h-12 w-12" />
+                      </Button>
+                      <p className="text-muted-foreground text-sm">Tap to speak your plan</p>
+                  </CardContent>
+              </Card>
+          )}
+
           <Card>
             <CardHeader>
-              <CardTitle>Now Playing</CardTitle>
-              <CardContent className="flex justify-center items-center pt-6">
-                 {!isTimerStarted ? (
-                    <Button size="lg" className="w-full h-14 text-lg" onClick={() => router.push(`/dashboard/focus?taskIndex=${currentTaskIndex}`)} disabled={isTimerActive}>
-                        <Play className="mr-2 h-6 w-6" /> Start Day
-                    </Button>
-                ) : (
-                    <Button asChild variant="default" size="lg">
-                        <Link href={`/dashboard/focus?taskIndex=${currentTaskIndex}`}>
-                            <PlayCircle className="mr-2 h-5 w-5" />
-                            {currentTaskIndex > 0 ? "Resume Day" : "Start Day"}
-                        </Link>
-                    </Button>
-                )}
-              </CardContent>
-            </CardHeader>
-          </Card>
-        )}
-        
-        {!schedule && !isGenerating && (
-             <Card className="min-h-[200px]">
-                <CardHeader>
-                    <CardTitle className="text-2xl">Plan Your Day</CardTitle>
-                    <CardDescription>Tell the AI assistant what you need to do, and it will create a schedule for you.</CardDescription>
-                </CardHeader>
-                <CardContent className="flex flex-col items-center justify-center gap-4">
-                    <Button onClick={() => setShowVoiceDialog(true)} className="h-24 w-24 rounded-full bg-accent hover:bg-accent/90 text-accent-foreground shadow-lg">
-                        <Mic className="h-12 w-12" />
-                    </Button>
-                    <p className="text-muted-foreground text-sm">Tap to speak your plan</p>
-                </CardContent>
-             </Card>
-        )}
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Today's Timeline</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {isGenerating ? (
-              <div className="flex justify-center items-center h-40">
-                <Loader2 className="h-8 w-8 animate-spin text-accent" />
-              </div>
-            ) : schedule ? (
-              <div className="relative">
-                 {nowPosition !== null && (
-                    <div
-                        className="absolute left-0 w-full flex items-center"
-                        style={{ top: `${nowPosition}px`, zIndex: 10 }}
-                    >
-                        <div className="w-2 h-2 rounded-full bg-accent mr-2"></div>
-                        <div className="h-px flex-grow bg-accent"></div>
-                    </div>
-                 )}
-                <ul className="space-y-4">
-                  {schedule.map((event, index) => (
-                    <li
-                      key={index}
-                      className={cn(
-                        "flex items-start gap-4 p-4 rounded-lg transition-all border",
-                        index < completedTasksCount && "opacity-50 bg-muted/50",
-                        index === currentTaskIndex && "bg-accent/10 border-accent",
-                      )}
-                    >
-                      <Link href={`/dashboard/focus?taskIndex=${index}`} className="flex-1 flex items-start gap-4">
-                        <div className="flex flex-col items-center">
-                          <span className="font-bold text-sm">{event.time}</span>
-                          <div className="w-px h-6 bg-border my-1"></div>
-                          <span className="text-xs text-muted-foreground">{event.duration}</span>
-                        </div>
-                        <div className="flex-1 pt-1">
-                          <p className="font-medium">{event.task}</p>
-                        </div>
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ) : (
-                <div className="text-center py-10 text-muted-foreground space-y-4">
-                    <p>What's on your plate today? Let the AI build your schedule.</p>
-                     <Button variant="link" onClick={() => handleGenerateSchedule("I have a dentist appointment at 2pm, need to work out for 30 minutes, study for 2 hours, and want to be in bed by 10pm")}>
-                        Try an example
-                    </Button>
-                </div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-
-      <div className="space-y-6">
-        <Card>
-            <CardHeader>
-                <CardTitle>Or type your plan...</CardTitle>
+              <CardTitle>Today's Timeline</CardTitle>
             </CardHeader>
             <CardContent>
-                 <Textarea
-                    value={planText}
-                    onChange={(e) => setPlanText(e.target.value)}
-                    onKeyDown={handleTextInputKeyDown}
-                    placeholder="e.g. I have a dentist appointment at 2pm..."
-                    className="text-base"
-                    rows={4}
-                />
-                 <Button className="mt-4 w-full" onClick={() => handleGenerateSchedule(planText)} disabled={!planText.trim() || isGenerating}>
-                    {isGenerating ? <><Loader2 className="mr-2 h-4 w-4 animate-spin"/> Generating...</> : "Generate Schedule"}
-                 </Button>
-                 {tomorrowsPlan && (
-                    <Button variant="outline" className="w-full mt-2" onClick={() => handleGenerateSchedule(tomorrowsPlan)}>
-                        <Sparkles className="mr-2 h-4 w-4"/> Start with yesterday's plan
-                    </Button>
-                )}
+              {isGenerating ? (
+                <div className="flex justify-center items-center h-40">
+                  <Loader2 className="h-8 w-8 animate-spin text-accent" />
+                </div>
+              ) : schedule ? (
+                <div className="relative">
+                  {nowPosition !== null && (
+                      <div
+                          className="absolute left-0 w-full flex items-center"
+                          style={{ top: `${nowPosition}px`, zIndex: 10 }}
+                      >
+                          <div className="w-2 h-2 rounded-full bg-accent mr-2"></div>
+                          <div className="h-px flex-grow bg-accent"></div>
+                      </div>
+                  )}
+                  <ul className="space-y-4">
+                    {schedule.map((event, index) => (
+                      <li
+                        key={index}
+                        className={cn(
+                          "flex items-start gap-4 p-4 rounded-lg transition-all border",
+                          index < completedTasksCount && "opacity-50 bg-muted/50",
+                          index === currentTaskIndex && "bg-accent/10 border-accent",
+                        )}
+                      >
+                        <Link href={`/dashboard/focus?taskIndex=${index}`} className="flex-1 flex items-start gap-4">
+                          <div className="flex flex-col items-center">
+                            <span className="font-bold text-sm">{event.time}</span>
+                            <div className="w-px h-6 bg-border my-1"></div>
+                            <span className="text-xs text-muted-foreground">{event.duration}</span>
+                          </div>
+                          <div className="flex-1 pt-1">
+                            <p className="font-medium">{event.task}</p>
+                          </div>
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : (
+                  <div className="text-center py-10 text-muted-foreground space-y-4">
+                      <p>What's on your plate today? Let the AI build your schedule.</p>
+                      <Button variant="link" onClick={() => handleGenerateSchedule("I have a dentist appointment at 2pm, need to work out for 30 minutes, study for 2 hours, and want to be in bed by 10pm")}>
+                          Try an example
+                      </Button>
+                  </div>
+              )}
             </CardContent>
-        </Card>
-        
-        <Card>
-            <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                    <Zap /> Quick Capture
-                </CardTitle>
-            </CardHeader>
-            <CardContent className="grid grid-cols-2 gap-2">
-                <QuickCaptureDialog
-                    trigger={<Button variant="outline" className="w-full"><Plus className="mr-2" /> Just Add This</Button>}
-                    title="Add a Task"
-                    description="Quickly add a new task to your current schedule. The AI will find the best spot for it."
-                    inputLabel="New Task"
-                    confirmText={isUpdating ? "Adding..." : "Add to Schedule"}
-                    isLoading={isUpdating}
-                    onConfirm={handleAddTask}
-                />
-                <QuickCaptureDialog
-                    trigger={<Button variant="outline" className="w-full"><Clock className="mr-2" /> Running Late</Button>}
-                    title="Running Late?"
-                    description="Enter how late you're running, and the AI will shift your upcoming tasks accordingly."
-                    inputLabel="Delay"
-                    confirmText={isAdjusting ? "Adjusting..." : "Adjust Schedule"}
-                    isLoading={isAdjusting}
-                    onConfirm={handleAdjustForDelay}
-                />
-                <QuickCaptureDialog
-                    trigger={<Button variant="outline" className="w-full"><CalendarIcon className="mr-2" /> Tomorrow Mode</Button>}
-                    title="Plan for Tomorrow"
-                    description="Roughly sketch out your plan for tomorrow. We'll save it and you can generate the full schedule in the morning."
-                    inputLabel="Tomorrow's Plan"
-                    confirmText={"Save Plan"}
-                    onConfirm={handlePlanTomorrow}
-                    multiline
-                />
-                 <Button variant="outline" className="w-full" onClick={() => {
-                     const completedTasks = schedule?.filter((_,i) => i < completedTasksCount).map(t => t.task).join(', ') || "No tasks completed.";
-                     handleSummarizeDay(`Completed tasks: ${completedTasks}`);
-                 }}>
-                    <Book className="mr-2 h-4 w-4" /> Reflect
-                </Button>
-            </CardContent>
-        </Card>
+          </Card>
+        </div>
 
+        <div className="space-y-6">
+          <Card>
+              <CardHeader>
+                  <CardTitle>Or type your plan...</CardTitle>
+              </CardHeader>
+              <CardContent>
+                  <Textarea
+                      value={planText}
+                      onChange={(e) => setPlanText(e.target.value)}
+                      onKeyDown={handleTextInputKeyDown}
+                      placeholder="e.g. I have a dentist appointment at 2pm..."
+                      className="text-base"
+                      rows={4}
+                  />
+                  <Button className="mt-4 w-full" onClick={() => handleGenerateSchedule(planText)} disabled={!planText.trim() || isGenerating}>
+                      {isGenerating ? <><Loader2 className="mr-2 h-4 w-4 animate-spin"/> Generating...</> : "Generate Schedule"}
+                  </Button>
+                  {tomorrowsPlan && (
+                      <Button variant="outline" className="w-full mt-2" onClick={() => handleGenerateSchedule(tomorrowsPlan)}>
+                          <Sparkles className="mr-2 h-4 w-4"/> Start with yesterday's plan
+                      </Button>
+                  )}
+              </CardContent>
+          </Card>
+          
+          <Card>
+              <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                      <Zap /> Quick Capture
+                  </CardTitle>
+              </CardHeader>
+              <CardContent className="grid grid-cols-2 gap-2">
+                  <QuickCaptureDialog
+                      trigger={<Button variant="outline" className="w-full"><Plus className="mr-2" /> Just Add This</Button>}
+                      title="Add a Task"
+                      description="Quickly add a new task to your current schedule. The AI will find the best spot for it."
+                      inputLabel="New Task"
+                      confirmText={isUpdating ? "Adding..." : "Add to Schedule"}
+                      isLoading={isUpdating}
+                      onConfirm={handleAddTask}
+                  />
+                  <QuickCaptureDialog
+                      trigger={<Button variant="outline" className="w-full"><Clock className="mr-2" /> Running Late</Button>}
+                      title="Running Late?"
+                      description="Enter how late you're running, and the AI will shift your upcoming tasks accordingly."
+                      inputLabel="Delay"
+                      confirmText={isAdjusting ? "Adjusting..." : "Adjust Schedule"}
+                      isLoading={isAdjusting}
+                      onConfirm={handleAdjustForDelay}
+                  />
+                  <Button variant="outline" className="w-full" onClick={() => setShowVoiceDialog(true)}>
+                      <Mic className="mr-2 h-4 w-4" /> Adjust Schedule
+                  </Button>
+                  <Button variant="outline" className="w-full" onClick={() => {
+                      const completedTasks = schedule?.filter((_,i) => i < completedTasksCount).map(t => t.task).join(', ') || "No tasks completed.";
+                      handleSummarizeDay(`Completed tasks: ${completedTasks}`);
+                  }}>
+                      <Book className="mr-2 h-4 w-4" /> Reflect
+                  </Button>
+              </CardContent>
+          </Card>
+
+        </div>
       </div>
-    </div>
     </>
   );
 }
+
+    
