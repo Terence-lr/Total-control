@@ -1,0 +1,375 @@
+{
+  "entities": {
+    "Task": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Task",
+      "type": "object",
+      "description": "Represents a single task or to-do item.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the Task entity."
+        },
+        "name": {
+          "type": "string",
+          "description": "The name or title of the task."
+        },
+        "durationMinutes": {
+          "type": "number",
+          "description": "The estimated or actual duration of the task in minutes."
+        },
+        "scheduledTime": {
+          "type": "string",
+          "description": "The time the task is scheduled to start (HH:MM).",
+          "format": "string"
+        },
+        "date": {
+          "type": "string",
+          "description": "The date the task is scheduled for (YYYY-MM-DD).",
+          "format": "string"
+        },
+        "completed": {
+          "type": "boolean",
+          "description": "Indicates whether the task has been completed."
+        },
+        "status": {
+          "type": "string",
+          "description": "The current status of the task (not_started, in_progress, completed, skipped)."
+        },
+        "type": {
+          "type": "string",
+          "description": "The type of the task (task, flow_task, routine_task)."
+        },
+        "notes": {
+          "type": "string",
+          "description": "Additional notes or details about the task."
+        },
+        "linkedGoalId": {
+          "type": "string",
+          "description": "Reference to Goal. (Relationship: Goal 1:N Task)"
+        },
+        "linkedFlowId": {
+          "type": "string",
+          "description": "Reference to Flow. (Relationship: Flow 1:N Task)"
+        },
+        "createdFrom": {
+          "type": "string",
+          "description": "Indicates how the task was created (voice, manual, flow)."
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Timestamp indicating when the task was created.",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "Timestamp indicating when the task was last updated.",
+          "format": "date-time"
+        },
+        "userId": {
+          "type": "string",
+          "description": "Reference to User. (Relationship: User 1:N Task)"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "durationMinutes",
+        "completed",
+        "status",
+        "type",
+        "createdAt",
+        "updatedAt",
+        "userId"
+      ]
+    },
+    "Flow": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Flow",
+      "type": "object",
+      "description": "Represents a sequence of tasks.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the Flow entity."
+        },
+        "name": {
+          "type": "string",
+          "description": "The name of the flow."
+        },
+        "taskIds": {
+          "type": "array",
+          "description": "References to Tasks. (Relationship: Flow 1:N Task)",
+          "items": {
+            "type": "string"
+          }
+        },
+        "estimatedTotalDuration": {
+          "type": "number",
+          "description": "The estimated total duration of the flow (calculated from tasks)."
+        },
+        "linkedGoalId": {
+          "type": "string",
+          "description": "Reference to Goal. (Relationship: Goal 1:N Flow)"
+        },
+        "isTemplate": {
+          "type": "boolean",
+          "description": "Indicates whether the flow is a template that can be reused."
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Timestamp indicating when the flow was created.",
+          "format": "date-time"
+        },
+        "lastUsed": {
+          "type": "string",
+          "description": "Timestamp indicating when the flow was last used.",
+          "format": "date-time"
+        },
+        "userId": {
+          "type": "string",
+          "description": "Reference to User. (Relationship: User 1:N Flow)"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "taskIds",
+        "estimatedTotalDuration",
+        "isTemplate",
+        "createdAt",
+        "userId"
+      ]
+    },
+    "Routine": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Routine",
+      "type": "object",
+      "description": "Represents a recurring flow scheduled to repeat on a defined schedule.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the Routine entity."
+        },
+        "name": {
+          "type": "string",
+          "description": "The name of the routine."
+        },
+        "flowId": {
+          "type": "string",
+          "description": "Reference to Flow. (Relationship: Routine 1:1 Flow)"
+        },
+        "schedule": {
+          "type": "string",
+          "description": "JSON object for the schedule. The object has a `frequency`, `daysOfWeek`, `timeOfDay`, and `customPattern` attributes"
+        },
+        "active": {
+          "type": "boolean",
+          "description": "Indicates whether the routine is currently active."
+        },
+        "streakCount": {
+          "type": "number",
+          "description": "The number of consecutive times the routine has been completed."
+        },
+        "completionRate": {
+          "type": "number",
+          "description": "The percentage of times the routine has been completed."
+        },
+        "linkedGoalId": {
+          "type": "string",
+          "description": "Reference to Goal. (Relationship: Goal 1:N Routine)"
+        },
+        "nextScheduled": {
+          "type": "string",
+          "description": "Timestamp indicating when the routine is next scheduled to run.",
+          "format": "date-time"
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Timestamp indicating when the routine was created.",
+          "format": "date-time"
+        },
+        "userId": {
+          "type": "string",
+          "description": "Reference to User. (Relationship: User 1:N Routine)"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "flowId",
+        "schedule",
+        "active",
+        "streakCount",
+        "completionRate",
+        "createdAt",
+        "userId"
+      ]
+    },
+    "Goal": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Goal",
+      "type": "object",
+      "description": "Represents a long-term objective.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the Goal entity."
+        },
+        "name": {
+          "type": "string",
+          "description": "The name or title of the goal."
+        },
+        "description": {
+          "type": "string",
+          "description": "A detailed description of the goal."
+        },
+        "startDate": {
+          "type": "string",
+          "description": "The date when the goal was started.",
+          "format": "date-time"
+        },
+        "endDate": {
+          "type": "string",
+          "description": "The target date for achieving the goal.",
+          "format": "date-time"
+        },
+        "progress": {
+          "type": "number",
+          "description": "The current progress towards the goal (percentage).",
+          "format": "number"
+        },
+        "userId": {
+          "type": "string",
+          "description": "Reference to User. (Relationship: User 1:N Goal)"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "description",
+        "startDate",
+        "endDate",
+        "progress",
+        "userId"
+      ]
+    },
+    "User": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "User",
+      "type": "object",
+      "description": "Represents a user of the application.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the User entity."
+        },
+        "email": {
+          "type": "string",
+          "description": "The user's email address.",
+          "format": "email"
+        },
+        "name": {
+          "type": "string",
+          "description": "The user's full name."
+        },
+        "preferences": {
+          "type": "string",
+          "description": "JSON object for the users preferences. The object has attributes for user preferences"
+        }
+      },
+      "required": [
+        "id",
+        "email",
+        "name"
+      ]
+    }
+  },
+  "auth": {
+    "providers": [
+      "password",
+      "anonymous"
+    ]
+  },
+  "firestore": {
+    "structure": [
+      {
+        "path": "users/{userId}/tasks/{taskId}",
+        "definition": {
+          "entityName": "Task",
+          "schema": {
+            "$ref": "#/backend/entities/Task"
+          },
+          "description": "Stores tasks for a specific user. Includes 'userId' field for authorization independence.",
+          "params": [
+            {
+              "name": "userId",
+              "description": "The ID of the user owning the task."
+            },
+            {
+              "name": "taskId",
+              "description": "The ID of the task."
+            }
+          ]
+        }
+      },
+      {
+        "path": "users/{userId}/flows/{flowId}",
+        "definition": {
+          "entityName": "Flow",
+          "schema": {
+            "$ref": "#/backend/entities/Flow"
+          },
+          "description": "Stores flows for a specific user. Includes 'userId' field for authorization independence.",
+          "params": [
+            {
+              "name": "userId",
+              "description": "The ID of the user owning the flow."
+            },
+            {
+              "name": "flowId",
+              "description": "The ID of the flow."
+            }
+          ]
+        }
+      },
+      {
+        "path": "users/{userId}/routines/{routineId}",
+        "definition": {
+          "entityName": "Routine",
+          "schema": {
+            "$ref": "#/backend/entities/Routine"
+          },
+          "description": "Stores routines for a specific user. Includes 'userId' field for authorization independence.",
+          "params": [
+            {
+              "name": "userId",
+              "description": "The ID of the user owning the routine."
+            },
+            {
+              "name": "routineId",
+              "description": "The ID of the routine."
+            }
+          ]
+        }
+      },
+      {
+        "path": "users/{userId}",
+        "definition": {
+          "entityName": "User",
+          "schema": {
+            "$ref": "#/backend/entities/User"
+          },
+          "description": "Stores user profile information.",
+          "params": [
+            {
+              "name": "userId",
+              "description": "The ID of the user."
+            }
+          ]
+        }
+      }
+    ],
+    "reasoning": "The Firestore data structure is designed to provide a clear separation of concerns, optimize security rules, and enable efficient data retrieval for the Total Control app. The primary principle is Authorization Independence, achieved through denormalization, which avoids the need for `get()` calls in security rules. This ensures atomic operations and easier debugging.\n\n1.  **users/{userId}**: This path holds user-specific data and acts as the root for all user-owned data. The user ID is explicitly part of the path, simplifying ownership-based security rules.\n2.  **users/{userId}/tasks/{taskId}**: This structure is used for storing tasks related to a specific user. By nesting the `tasks` collection under the `users/{userId}` document, we ensure that each task is directly associated with its owner. `userId` field on the Task document also enables listing tasks by user efficiently and securely.\n3.  **users/{userId}/flows/{flowId}**: Flows are also nested under users, following the same ownership pattern as tasks. This enables listing flows for a user and simplifies security rules.\n4.  **users/{userId}/routines/{routineId}**: Routines, like flows and tasks, are nested under users, maintaining consistent ownership and security.\n\nThis structure supports the required QAPs (Query Across Partitions) by:\n\n*   **Segregation:** Each collection (tasks, flows, routines) is segregated by user, ensuring that a user can only access their own data. This simplifies security rules and prevents unauthorized access.\n\nDenormalization Strategy:\n\nThe `userId` field is included in each document within the `tasks`, `flows`, and `routines` collections. This denormalization allows security rules to validate ownership without needing to perform additional reads (e.g., `get()` calls) to check the parent document. This ensures Authorization Independence, improves performance, and simplifies the rule structure."
+  }
+}

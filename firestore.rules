@@ -1,0 +1,141 @@
+/**
+ * @file Firebase Security Rules for the Total Control app.
+ *
+ * Core Philosophy:
+ * This ruleset enforces a strict user-ownership model for tasks, flows, and routines.
+ * Users can only access data that belongs to them.
+ *
+ * Data Structure:
+ * All data is nested under `/users/{userId}`, ensuring clear ownership. This structure includes the user's tasks, flows, and routines.
+ *
+ * Key Security Decisions:
+ * - User listing is disallowed for privacy.
+ * - Authorization Independence: Each document in `tasks`, `flows`, and `routines` collections contains a `userId` field, which must match the `userId` in the path.
+ * - All write operations are owner-only and require the document to already exist.
+ *
+ * Denormalization for Authorization:
+ * The `userId` is included in each Task, Flow, and Routine document.
+ * This allows security rules to validate ownership without additional reads.
+ */
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    /**
+     * @description Checks if the requesting user is signed in.
+     * @path N/A
+     * @allow N/A
+     * @deny N/A
+     * @principle Requires authentication for all protected resources.
+     */
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    /**
+     * @description Checks if the requesting user is the owner of the resource based on the userId.
+     * @path N/A
+     * @allow N/A
+     * @deny N/A
+     * @principle Enforces document ownership for access control.
+     */
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    /**
+     * @description Checks if the requesting user is the owner of the existing resource based on the userId.
+     * @path N/A
+     * @allow N/A
+     * @deny N/A
+     * @principle Enforces document ownership for access control to an existing resource.
+     */
+    function isExistingOwner(userId) {
+        return isOwner(userId) && resource != null;
+    }
+
+    /**
+     * @description Grants access to user documents.
+     * @path /users/{userId}
+     * @allow (create) - Authenticated user can create their own user document.
+     * @allow (get) - Authenticated user can retrieve their own user document.
+     * @allow (update) - Authenticated user can update their own user document.
+     * @deny (create) - Unauthorized user attempting to create a user document with a different user ID.
+     * @deny (get) - Unauthorized user attempting to retrieve a different user document.
+     * @deny (update) - Unauthorized user attempting to update a different user document.
+     * @deny (list) - Listing user documents is not allowed.
+     * @deny (delete) - Deleting user documents is not allowed.
+     * @principle Enforces document ownership and prevents unauthorized data access.
+     */
+    match /users/{userId} {
+      allow get: if isOwner(userId);
+      allow list: if false;
+      allow create: if isOwner(userId) && request.resource.data.id == userId;
+      allow update: if isExistingOwner(userId) && request.resource.data.id == resource.data.id;
+      allow delete: if false;
+    }
+
+    /**
+     * @description Grants access to tasks for a specific user.
+     * @path /users/{userId}/tasks/{taskId}
+     * @allow (create) - Authenticated user can create a task under their user ID if the task document's userId matches the path.
+     * @allow (get) - Authenticated user can retrieve a task under their user ID.
+     * @allow (update) - Authenticated user can update a task under their user ID if the task document's userId matches the path.
+     * @allow (list) - Authenticated user can list tasks under their user ID.
+     * @deny (create) - Unauthorized user attempting to create a task with a mismatched user ID.
+     * @deny (get) - Unauthorized user attempting to retrieve a task under a different user ID.
+     * @deny (update) - Unauthorized user attempting to update a task under a different user ID.
+     * @deny (delete) - Unauthorized user attempting to delete a task under a different user ID.
+     * @principle Enforces document ownership and prevents unauthorized data access.
+     */
+    match /users/{userId}/tasks/{taskId} {
+      allow get: if isOwner(userId);
+      allow list: if isOwner(userId);
+      allow create: if isOwner(userId) && request.resource.data.userId == userId;
+      allow update: if isExistingOwner(userId) && request.resource.data.userId == resource.data.userId;
+      allow delete: if isExistingOwner(userId);
+    }
+
+    /**
+     * @description Grants access to flows for a specific user.
+     * @path /users/{userId}/flows/{flowId}
+     * @allow (create) - Authenticated user can create a flow under their user ID if the flow document's userId matches the path.
+     * @allow (get) - Authenticated user can retrieve a flow under their user ID.
+     * @allow (update) - Authenticated user can update a flow under their user ID if the flow document's userId matches the path.
+     * @allow (list) - Authenticated user can list flows under their user ID.
+     * @deny (create) - Unauthorized user attempting to create a flow with a mismatched user ID.
+     * @deny (get) - Unauthorized user attempting to retrieve a flow under a different user ID.
+     * @deny (update) - Unauthorized user attempting to update a flow under a different user ID.
+     * @deny (delete) - Unauthorized user attempting to delete a flow under a different user ID.
+     * @principle Enforces document ownership and prevents unauthorized data access.
+     */
+    match /users/{userId}/flows/{flowId} {
+      allow get: if isOwner(userId);
+      allow list: if isOwner(userId);
+      allow create: if isOwner(userId) && request.resource.data.userId == userId;
+      allow update: if isExistingOwner(userId) && request.resource.data.userId == resource.data.userId;
+      allow delete: if isExistingOwner(userId);
+    }
+
+    /**
+     * @description Grants access to routines for a specific user.
+     * @path /users/{userId}/routines/{routineId}
+     * @allow (create) - Authenticated user can create a routine under their user ID if the routine document's userId matches the path.
+     * @allow (get) - Authenticated user can retrieve a routine under their user ID.
+     * @allow (update) - Authenticated user can update a routine under their user ID if the routine document's userId matches the path.
+     * @allow (list) - Authenticated user can list routines under their user ID.
+     * @deny (create) - Unauthorized user attempting to create a routine with a mismatched user ID.
+     * @deny (get) - Unauthorized user attempting to retrieve a routine under a different user ID.
+     * @deny (update) - Unauthorized user attempting to update a routine under a different user ID.
+     * @deny (delete) - Unauthorized user attempting to delete a routine under a different user ID.
+     * @principle Enforces document ownership and prevents unauthorized data access.
+     */
+    match /users/{userId}/routines/{routineId} {
+      allow get: if isOwner(userId);
+      allow list: if isOwner(userId);
+      allow create: if isOwner(userId) && request.resource.data.userId == userId;
+      allow update: if isExistingOwner(userId) && request.resource.data.userId == resource.data.userId;
+      allow delete: if isExistingOwner(userId);
+    }
+  }
+}
