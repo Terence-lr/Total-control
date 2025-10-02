@@ -59,10 +59,11 @@ The existing schedule is:
 The user is running late by: "{{delayDuration}}"
 
 Follow these rules:
-1.  **Identify Future Tasks:** Based on the current time, identify all tasks in the schedule that have not yet started.
-2.  **Calculate New Times:** For each future task, shift its start time forward by the specified delay duration. Do not change the times of past or currently active tasks.
-3.  **Maintain Duration:** Do not alter the duration of any task.
-4.  **Return the Full Schedule:** Output the complete, updated schedule in the correct JSON format, including both the unchanged past tasks and the shifted future tasks. Ensure the final schedule remains chronologically ordered.
+1.  **Identify Future Tasks:** Based on the \`currentTime\`, identify all tasks in the schedule that have not yet started.
+2.  **Do Not Change Past:** Do not change the start times or durations of tasks that have already started or are completed.
+3.  **Calculate New Times:** For each identified future task, shift its start time forward by the specified \`delayDuration\`.
+4.  **Maintain Duration:** Do not alter the duration of any task.
+5.  **Return the Full Schedule:** Output the complete, updated schedule in the correct JSON format, including both the unchanged past tasks and the shifted future tasks. Ensure the final schedule remains chronologically ordered.
 `,
 });
 

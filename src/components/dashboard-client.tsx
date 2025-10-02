@@ -1,4 +1,5 @@
-"use client";
+
+'use client';
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
@@ -203,14 +204,68 @@ export function DashboardClient() {
         });
     }
   }, [clarificationState, callGenerateSchedule]);
+
+  const handleAddTask = useCallback(async (newTaskRequest: string) => {
+    if (!schedule) {
+      toast({
+        title: "No active schedule",
+        description: "Generate a schedule before adding new tasks.",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (!newTaskRequest.trim()) {
+      toast({
+        title: "Task is empty",
+        description: "Please enter a task to add.",
+        variant: "destructive",
+      });
+      return;
+    }
+    setIsUpdating(true);
+    setShowVoiceDialog(false);
+    try {
+      const result = await addTaskToSchedule({
+        existingSchedule: schedule,
+        request: newTaskRequest,
+        currentTime: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+      });
+      
+      if (result.needs_clarification && result.clarifying_question) {
+          // TODO: Handle clarification for adjustments
+          toast({
+              title: "Needs Clarification",
+              description: result.clarifying_question,
+          });
+      } else {
+        setSchedule(result.schedule);
+        toast({
+          title: "Schedule Updated",
+          description: result.changes_summary || "Your schedule has been updated.",
+        });
+      }
+
+    } catch (error) {
+      console.error("Error adding task to schedule:", error);
+      toast({
+        title: "Error",
+        description: "Failed to add task to schedule. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsUpdating(false);
+    }
+  }, [schedule, toast]);
   
   const handleFinalTranscript = useCallback((text: string) => {
     if (clarificationState) {
         handleClarificationResponse(text);
+    } else if (schedule) {
+        handleAddTask(text);
     } else {
         handleGenerateSchedule(text);
     }
-  }, [clarificationState, handleGenerateSchedule, handleClarificationResponse]);
+  }, [clarificationState, schedule, handleGenerateSchedule, handleClarificationResponse, handleAddTask]);
 
   const {
     isRecording,
@@ -299,47 +354,6 @@ export function DashboardClient() {
     const timeInterval = setInterval(fetchTime, 60000); // Update every minute
     return () => clearInterval(timeInterval);
   }, []);
-
-  const handleAddTask = async (newTask: string) => {
-    if (!schedule) {
-      toast({
-        title: "No active schedule",
-        description: "Generate a schedule before adding new tasks.",
-        variant: "destructive",
-      });
-      return;
-    }
-    if (!newTask.trim()) {
-      toast({
-        title: "Task is empty",
-        description: "Please enter a task to add.",
-        variant: "destructive",
-      });
-      return;
-    }
-    setIsUpdating(true);
-    try {
-      const result = await addTaskToSchedule({
-        existingSchedule: schedule,
-        newTask: newTask,
-        currentTime: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
-      });
-      setSchedule(result.schedule);
-      toast({
-        title: "Schedule Updated",
-        description: "Your new task has been added to the timeline.",
-      });
-    } catch (error) {
-      console.error("Error adding task to schedule:", error);
-      toast({
-        title: "Error",
-        description: "Failed to add task to schedule. Please try again.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsUpdating(false);
-    }
-  };
 
   const handleAdjustForDelay = async (delay: string) => {
     if (!schedule) {
@@ -565,6 +579,8 @@ export function DashboardClient() {
         setShowVoiceDialog(false);
     };
 
+    const isLoading = isGenerating || isUpdating;
+
     return (
         <Dialog open={showVoiceDialog} onOpenChange={(open) => {
             if (!open) { handleCancel(); }
@@ -574,38 +590,40 @@ export function DashboardClient() {
                 <div className="flex-1 flex flex-col items-center justify-center text-center p-8 relative">
                     
                     <div className="absolute top-10 text-center w-full max-w-2xl px-4">
-                        {isRecording && (
-                          <div className="min-h-[80px]">
-                            <p className="text-2xl text-muted-foreground mb-4">{transcript.interim || "Listening..."}</p>
-                            <p className="text-4xl lg:text-5xl font-bold text-foreground fade-in">{transcript.final}</p>
-                          </div>
-                        )}
-                        {isGenerating && (
-                           <p className="text-2xl font-medium text-muted-foreground">Thinking...</p>
-                        )}
-                        {clarificationState && clarificationState.questions.length > 0 && (
-                            <div className="w-full max-w-lg mx-auto text-left fade-in">
-                                <Label className="text-2xl font-semibold mb-4 block text-center">{clarificationState.questions[0]}</Label>
-                                <div className="flex gap-2">
-                                    <Textarea
-                                        value={planText}
-                                        onChange={(e) => setPlanText(e.target.value)}
-                                        onKeyDown={handleTextInputKeyDown}
-                                        placeholder="Type your answer... (Cmd+Enter to submit)"
-                                        disabled={isGenerating}
-                                        className="text-lg"
-                                        rows={2}
-                                    />
-                                    <Button size="lg" onClick={() => handleClarificationResponse(planText)} disabled={!planText.trim() || isGenerating}>
-                                      {isGenerating ? <Loader2 className="animate-spin" /> : <ArrowRight />}
-                                    </Button>
+                        <div className="min-h-[80px]">
+                            {isRecording && (
+                                <>
+                                    <p className="text-2xl text-muted-foreground mb-4">{transcript.interim || "Listening..."}</p>
+                                    <p className="text-4xl lg:text-5xl font-bold text-foreground fade-in">{transcript.final}</p>
+                                </>
+                            )}
+                            {isLoading && (
+                               <p className="text-2xl font-medium text-muted-foreground">Thinking...</p>
+                            )}
+                            {clarificationState && clarificationState.questions.length > 0 && !isLoading && (
+                                <div className="w-full max-w-lg mx-auto text-left fade-in">
+                                    <Label className="text-2xl font-semibold mb-4 block text-center">{clarificationState.questions[0]}</Label>
+                                    <div className="flex gap-2">
+                                        <Textarea
+                                            value={planText}
+                                            onChange={(e) => setPlanText(e.target.value)}
+                                            onKeyDown={handleTextInputKeyDown}
+                                            placeholder="Type your answer... (Cmd+Enter to submit)"
+                                            disabled={isLoading}
+                                            className="text-lg"
+                                            rows={2}
+                                        />
+                                        <Button size="lg" onClick={() => handleClarificationResponse(planText)} disabled={!planText.trim() || isLoading}>
+                                          {isLoading ? <Loader2 className="animate-spin" /> : <ArrowRight />}
+                                        </Button>
+                                    </div>
                                 </div>
-                            </div>
-                        )}
+                            )}
+                        </div>
                     </div>
                     
                     <div className="flex flex-col items-center justify-center gap-6">
-                        {!isRecording && !isGenerating && !clarificationState && (
+                        {!isRecording && !isLoading && !clarificationState && (
                             <Button 
                                 onClick={startRecognition} 
                                 disabled={!isAvailable} 
@@ -625,14 +643,16 @@ export function DashboardClient() {
                                 <div className="absolute -bottom-10 left-1/2 -translate-x-1/2 text-xl font-mono text-foreground">{formatTime(recordingTime)}</div>
                             </div>
                         )}
-                         {isGenerating && <Loader2 className="h-16 w-16 animate-spin text-accent" />}
+                         {isLoading && <Loader2 className="h-16 w-16 animate-spin text-accent" />}
                     </div>
                     
                     <div className="absolute bottom-8 text-center w-full">
                          {isRecording ? (
                               <Button variant="ghost" onClick={handleCancel}>Cancel</Button>
-                         ) : !isGenerating && (
-                              <p className="text-muted-foreground text-sm">Tap the mic to start speaking</p>
+                         ) : !isLoading && (
+                              <p className="text-muted-foreground text-sm">
+                                {schedule ? "Tap to make an adjustment" : "Tap the mic to start speaking"}
+                              </p>
                          )}
                          {error && <p className="text-sm text-destructive mt-2">{error}</p>}
                     </div>
@@ -888,3 +908,5 @@ export function DashboardClient() {
     </>
   );
 }
+
+    
